@@ -769,10 +769,11 @@ EL.btnSignup.addEventListener('click', async () => {
         EL.authError.innerText = error.message;
         EL.authStatus.innerText = '';
     } else {
-        EL.authStatus.innerText = 'Регистрация успешна! Проверьте email или войдите.';
-        // If email confirmation is off, data.user is available
-        if (data.user && data.session) {
+        if (data.session) {
+            EL.authStatus.innerText = 'Вход успешен...';
             loadUserData(data.user.id);
+        } else {
+            EL.authStatus.innerText = 'Аккаунт создан! Теперь нажмите кнопку "Войти".';
         }
     }
 });
