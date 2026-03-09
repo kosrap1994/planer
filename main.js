@@ -943,6 +943,24 @@ async function loadUserData(userId) {
 async function checkSession() {
     EL.authStatus.innerText = 'Проверка сессии...';
     console.log('App init: checking session via getSession()');
+    
+    // Manual recovery attempt for GitHub Pages
+    try {
+        const storedAuth = localStorage.getItem('ideal-planner-auth');
+        if (storedAuth) {
+            const parsed = JSON.parse(storedAuth);
+            if (parsed && parsed.access_token && parsed.refresh_token) {
+                console.log('App init: Found token in localStorage, forcing setSession...');
+                await supabase.auth.setSession({
+                    access_token: parsed.access_token,
+                    refresh_token: parsed.refresh_token
+                });
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to parse local storage auth:', e);
+    }
+
     const { data: { session }, error } = await supabase.auth.getSession();
     
     if (session) {
