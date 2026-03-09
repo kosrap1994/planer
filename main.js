@@ -942,19 +942,23 @@ async function loadUserData(userId) {
 
 async function checkSession() {
     EL.authStatus.innerText = 'Проверка сессии...';
+    console.log('App init: checking session via getSession()');
     const { data: { session }, error } = await supabase.auth.getSession();
     
     if (session) {
+        console.log('App init: getSession found an active session');
         // Handled by onAuthStateChange usually, but just in case
         loadUserData(session.user.id);
     } else {
+        console.log('App init: getSession did not find an active session. Waiting for onAuthStateChange payload.');
         setTimeout(() => {
             if (!isLoggingIn && !appState) {
+                console.log('App init: No session found after 2000ms. Showing login overlay.');
                 EL.authStatus.innerText = '';
                 EL.authOverlay.style.display = 'flex';
                 EL.appContent.style.display = 'none';
             }
-        }, 500);
+        }, 2000);
     }
 }
 
@@ -1034,4 +1038,6 @@ supabase.auth.onAuthStateChange((event, session) => {
 });
 
 // Initial load check
-checkSession();
+document.addEventListener('DOMContentLoaded', () => {
+    checkSession();
+});
