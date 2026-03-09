@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ideal RPG Planner</title>
+    <!-- Add Supabase client indirectly through main.js (we'll make it a module) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    
+    <!-- Auth Modal -->
+    <div id="auth-overlay" class="modal-overlay">
+        <div class="modal-content auth-panel">
+            <h2 id="auth-title">Вход в систему</h2>
+            <p class="text-secondary" style="margin-bottom: 20px;">Для синхронизации данных необходим аккаунт.</p>
+            
+            <input type="email" id="auth-email" class="glass-input" placeholder="Email" style="width: 100%; margin-bottom: 10px;">
+            <input type="password" id="auth-password" class="glass-input" placeholder="Пароль" style="width: 100%; margin-bottom: 20px;">
+            
+            <div id="auth-error" style="color: #ff6b6b; margin-bottom: 10px; font-size: 0.9em; display: none;"></div>
+            
+            <button id="btn-login" class="btn" style="width: 100%; margin-bottom: 10px;">Войти</button>
+            <button id="btn-signup" class="btn" style="width: 100%; background: transparent; border: 1px solid var(--accent-color);">Зарегистрироваться</button>
+            
+            <div style="margin-top: 15px; text-align: center; color: var(--text-secondary); font-size: 0.85em;">
+                <span id="auth-status">Ожидание...</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="particle-container"></div>
+    <div class="app-container" id="app-content" style="display: none;">
+        
+        <header class="header neon-border">
+            <div class="header-content">
+                <div class="user-stats">
+                    <div class="level-badge">LVL <span id="user-level">1</span></div>
+                    <div class="exp-container">
+                        <div class="exp-info">
+                            <span class="exp-label">Опыт (EXP)</span>
+                            <span class="exp-numbers"><span id="current-exp">0</span> / <span id="max-exp">100</span></span>
+                        </div>
+                        <div class="exp-bar-bg">
+                            <div class="exp-bar-fill" id="exp-fill"></div>
+                            <div class="exp-glow"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-controls">
+                    <h1 class="title">Идеальный Планер</h1>
+                    <button class="btn btn-clear" id="btn-clear" title="Начать новую неделю. Прогресс и уровень будут сохранены!">
+                        <span class="btn-icon">⚡</span> Очистить неделю
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <nav class="main-nav">
+            <button class="nav-btn active" data-target="view-week">Неделя</button>
+            <button class="nav-btn" data-target="view-month">Месяц</button>
+            <button class="nav-btn" data-target="view-year">Год</button>
+            <button class="nav-btn" data-target="view-profile">Профиль</button>
+        </nav>
+
+        <section id="view-week" class="view active">
+            <main class="main-grid">
+            <aside class="sidebar left-sidebar">
+                <div class="panel highlight-panel">
+                    <h2>Календарь-Навигатор</h2>
+                    <input type="date" id="week-start-date" class="glass-input date-input" title="Выберите день, чтобы перейти к нему">
+                </div>
+                
+                <div class="panel focus-panel">
+                    <h2>Основное внимание</h2>
+                    <textarea id="main-focus" class="glass-input textarea" placeholder="Главные цели на эту неделю..." rows="4"></textarea>
+                </div>
+
+                <div class="panel habits-panel">
+                    <div class="panel-header">
+                        <h2 id="habit-panel-title">Привычки (Понедельник)</h2>
+                        <span class="exp-reward">+5 EXP</span>
+                    </div>
+                    <ul class="habit-list" id="habit-list">
+                        <!-- Habits will be generated here -->
+                    </ul>
+                    <div class="add-item-form">
+                        <input type="text" id="new-habit-input" class="glass-input mini-input" placeholder="Новая привычка...">
+                        <button id="add-habit-btn" class="btn btn-add">+</button>
+                    </div>
+                </div>
+            </aside>
+
+            <div class="days-grid" id="days-grid">
+                <!-- Days will be generated here -->
+            </div>
+            </main>
+        </section>
+
+        <!-- View: Month -->
+        <section id="view-month" class="view">
+            <div class="panel highlight-panel">
+                <h2 id="month-view-title">Цели на месяц</h2>
+                <p class="text-secondary">Здесь ваши глобальные задачи на месяц, выбранный в Календаре.</p>
+                <div id="monthly-goals-container"></div>
+                <button class="btn btn-add-task add-goal-btn" data-type="month" style="margin-top: 20px; border-style: dashed;">+ Добавить цель на месяц</button>
+            </div>
+        </section>
+
+        <!-- View: Year -->
+        <section id="view-year" class="view">
+            <div class="panel focus-panel">
+                <h2 id="year-view-title">Цели на год</h2>
+                <p class="text-secondary">Здесь ваши стратегические задачи на выбранный год.</p>
+                <div id="yearly-goals-container"></div>
+                <button class="btn btn-add-task add-goal-btn" data-type="year" style="margin-top: 20px; border-style: dashed;">+ Добавить цель на год</button>
+            </div>
+        </section>
+
+        <!-- View: Profile & Stats -->
+        <section id="view-profile" class="view">
+            <div class="profile-grid">
+                <div class="panel stats-panel">
+                    <h2>Общая Статистика</h2>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-value text-accent" id="stat-tasks-done">0</span>
+                            <span class="stat-label">Задач<br>выполнено</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-value text-exp" id="stat-habits-done">0</span>
+                            <span class="stat-label">Привычек<br>выполнено</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-value text-level" id="stat-best-day">-</span>
+                            <span class="stat-label">Лучший<br>день</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel history-panel">
+                    <h2>История недель</h2>
+                    <div id="history-container" class="history-list">
+                        <!-- History items generated here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+    
+    <div id="level-up-overlay" class="hidden">
+        <div class="level-up-modal">
+            <div class="sparkles">✨</div>
+            <h2>LEVEL UP!</h2>
+            <div class="new-level-badge">Уровень <span id="modal-level">2</span></div>
+            <p>Вы стали еще продуктивнее!</p>
+            <button class="btn btn-continue" id="close-modal-btn">Продолжить</button>
+        </div>
+    </div>
+
+    <!-- EXP floating numbers container -->
+    <div id="floating-exp-container"></div>
+
+    <script type="module" src="./main.js"></script>
+</body>
+</html>
