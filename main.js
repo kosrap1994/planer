@@ -723,10 +723,14 @@ function renderAll() {
 // Nav Switching
 EL.navBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
-        EL.navBtns.forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
+        const targetViewId = e.currentTarget.dataset.target;
+        if (!targetViewId) return; // Skip non-navigation buttons
         
-        const targetViewId = e.target.dataset.target;
+        EL.navBtns.forEach(b => {
+             if (b.dataset.target) b.classList.remove('active');
+        });
+        e.currentTarget.classList.add('active');
+        
         EL.views.forEach(v => {
             if (v.id === targetViewId) {
                 v.classList.add('active');
@@ -840,13 +844,31 @@ EL.addTemplateBtn.addEventListener('click', () => {
     EL.newTemplateInput.value = '';
     EL.dayToggles.forEach(cb => cb.checked = false);
     
+    // Auto-inject into the already generated days of the current week
+    const baseD = new Date(appState.weekStartDate);
+    for (let i = 0; i < 7; i++) {
+        const currentD = new Date(baseD);
+        currentD.setDate(currentD.getDate() + i);
+        const y = currentD.getFullYear();
+        const m = String(currentD.getMonth()+1).padStart(2,'0');
+        const dayStr = String(currentD.getDate()).padStart(2,'0');
+        const dateKey = `${y}-${m}-${dayStr}`;
+        const dayOfWeek = currentD.getDay(); // 0-6
+        
+        if (selectedDays.includes(dayOfWeek)) {
+            if (!appState.taskChecks[dateKey]) {
+                appState.taskChecks[dateKey] = [];
+            }
+            // Add to the top of the day
+            appState.taskChecks[dateKey].unshift({ id: generateId(), text: text, done: false });
+        }
+    }
+    
     saveState();
     renderTemplates();
     
-    // Suggest refreshing the current week to apply
-    if (confirm('Шаблон успешно добавлен. Обновить текущую неделю, чтобы применить шаблон к еще не открытым дням?')) {
-        renderDays();
-    }
+    // Refresh to show injected templates immediately
+    renderDays();
 });
 
 EL.mainFocus.addEventListener('input', (e) => {
