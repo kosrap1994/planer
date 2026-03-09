@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="./assets/index-BJztNDu2.js"></script>
+  <script type="module" crossorigin src="./assets/index-CU5VnBj6.js"></script>
   <link rel="stylesheet" crossorigin href="./assets/index-Bp7WHE8Q.css">
 </head>
 <body>
@@ -62,6 +62,7 @@
             <button class="nav-btn" data-target="view-month">Месяц</button>
             <button class="nav-btn" data-target="view-year">Год</button>
             <button class="nav-btn" data-target="view-profile">Профиль</button>
+            <button class="nav-btn" id="btn-open-templates" style="margin-left: auto; border: 1px solid var(--accent-color); color: var(--accent-color);">📋 Шаблоны Задач</button>
         </nav>
 
         <section id="view-week" class="view active">
@@ -156,6 +157,36 @@
             <div class="new-level-badge">Уровень <span id="modal-level">2</span></div>
             <p>Вы стали еще продуктивнее!</p>
             <button class="btn btn-continue" id="close-modal-btn">Продолжить</button>
+        </div>
+    </div>
+
+    <!-- Task Templates Modal -->
+    <div id="templates-overlay" class="hidden modal-overlay">
+        <div class="modal-content">
+            <button class="delete-btn" id="close-templates-btn" style="position: absolute; right: 15px; top: 15px; font-size: 24px;">×</button>
+            <h2>Шаблоны Регулярных Задач</h2>
+            <p class="text-secondary" style="margin-bottom: 20px;">Задачи будут автоматически появляться в календаре в выбранные дни.</p>
+            
+            <div id="templates-list" style="margin-bottom: 20px; max-height: 250px; overflow-y: auto;">
+                <!-- Templates will be rendered here -->
+            </div>
+            
+            <div class="panel" style="padding: 15px; border-style: dashed;">
+                <h3 style="margin-top: 0; font-size: 1.1em; margin-bottom: 10px;">Создать новый шаблон</h3>
+                <input type="text" id="new-template-input" class="glass-input" placeholder="Название задачи (например: Зал, Уборка)..." style="width: 100%; margin-bottom: 15px;">
+                
+                <div style="display: flex; gap: 5px; justify-content: space-between; margin-bottom: 15px;">
+                    <label class="day-toggle"><input type="checkbox" value="1"> <span>Пн</span></label>
+                    <label class="day-toggle"><input type="checkbox" value="2"> <span>Вт</span></label>
+                    <label class="day-toggle"><input type="checkbox" value="3"> <span>Ср</span></label>
+                    <label class="day-toggle"><input type="checkbox" value="4"> <span>Чт</span></label>
+                    <label class="day-toggle"><input type="checkbox" value="5"> <span>Пт</span></label>
+                    <label class="day-toggle"><input type="checkbox" value="6"> <span>Сб</span></label>
+                    <label class="day-toggle"><input type="checkbox" value="0"> <span>Вс</span></label>
+                </div>
+                
+                <button id="add-template-btn" class="btn" style="width: 100%;">+ Добавить шаблон</button>
+            </div>
         </div>
     </div>
 
