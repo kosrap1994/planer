@@ -14,11 +14,10 @@ const initialState = {
     mainFocus: '',
     stats: {
         tasksDone: 0,
-        habitsDone: 0,
-        daysStats: { 'd1': 0, 'd2': 0, 'd3': 0, 'd4': 0, 'd5': 0, 'd6': 0, 'd7': 0 }
+        habitsDone: 0
     },
-    history: [],
     habitChecks: {}, // Dictionary: 'YYYY-MM-DD' -> { 'h1': true, ... }
+    taskChecks: {}, // Dictionary: 'YYYY-MM-DD' -> [{id: '...', text: '...', done: false}, ...]
     monthlyGoals: {}, // Dictionary: 'YYYY-MM' -> [...]
     yearlyGoals: {}, // Dictionary: 'YYYY' -> [...]
     habits: [
@@ -27,13 +26,13 @@ const initialState = {
         { id: 'h3', text: 'Спорт / Разминка' }
     ],
     days: [
-        { id: 'd1', name: 'Понедельник', tasks: [{ id: 't1_1', text: 'Рабочая задача 1', done: false }], habits: {} },
-        { id: 'd2', name: 'Вторник', tasks: [{ id: 't2_1', text: '', done: false }], habits: {} },
-        { id: 'd3', name: 'Среда', tasks: [{ id: 't3_1', text: '', done: false }], habits: {} },
-        { id: 'd4', name: 'Четверг', tasks: [{ id: 't4_1', text: '', done: false }], habits: {} },
-        { id: 'd5', name: 'Пятница', tasks: [{ id: 't5_1', text: '', done: false }], habits: {} },
-        { id: 'd6', name: 'Суббота', tasks: [{ id: 't6_1', text: '', done: false }], habits: {} },
-        { id: 'd7', name: 'Воскресенье', tasks: [{ id: 't7_1', text: '', done: false }], habits: {} }
+        { id: 'd1', name: 'Понедельник' },
+        { id: 'd2', name: 'Вторник' },
+        { id: 'd3', name: 'Среда' },
+        { id: 'd4', name: 'Четверг' },
+        { id: 'd5', name: 'Пятница' },
+        { id: 'd6', name: 'Суббота' },
+        { id: 'd7', name: 'Воскресенье' }
     ]
 };
 
@@ -65,7 +64,6 @@ const EL = {
     newHabitInput: document.getElementById('new-habit-input'),
     addHabitBtn: document.getElementById('add-habit-btn'),
     daysGrid: document.getElementById('days-grid'),
-    btnClear: document.getElementById('btn-clear'),
     levelUpOverlay: document.getElementById('level-up-overlay'),
     modalLevel: document.getElementById('modal-level'),
     closeModalBtn: document.getElementById('close-modal-btn'),
@@ -110,21 +108,28 @@ function validateState() {
     
     if (!appState.activeDayId) appState.activeDayId = 'd1';
     
-    if (!appState.habitChecks) {
-        appState.habitChecks = {};
-        const baseD = new Date(appState.weekStartDate);
-        appState.days.forEach((dayObj, i) => {
-            const currentD = new Date(baseD);
-            currentD.setDate(currentD.getDate() + i);
-            const y = currentD.getFullYear();
-            const m = String(currentD.getMonth()+1).padStart(2,'0');
-            const dayStr = String(currentD.getDate()).padStart(2,'0');
-            const dateKey = `${y}-${m}-${dayStr}`;
-            if (dayObj.habits && Object.keys(dayObj.habits).length > 0) {
-                appState.habitChecks[dateKey] = { ...dayObj.habits };
-            }
-        });
-    }
+    // Migrate old habits and tasks to date-keys if they don't exist
+    if (!appState.taskChecks) appState.taskChecks = {};
+    if (!appState.habitChecks) appState.habitChecks = {};
+    
+    const baseD = new Date(appState.weekStartDate);
+    appState.days.forEach((dayObj, i) => {
+        const currentD = new Date(baseD);
+        currentD.setDate(currentD.getDate() + i);
+        const y = currentD.getFullYear();
+        const m = String(currentD.getMonth()+1).padStart(2,'0');
+        const dayStr = String(currentD.getDate()).padStart(2,'0');
+        const dateKey = `${y}-${m}-${dayStr}`;
+        
+        if (dayObj.tasks) {
+            appState.taskChecks[dateKey] = [ ...dayObj.tasks ];
+            delete dayObj.tasks;
+        }
+        if (dayObj.habits && Object.keys(dayObj.habits).length > 0) {
+            appState.habitChecks[dateKey] = { ...dayObj.habits };
+            delete dayObj.habits;
+        }
+    });
 }
 
 // Saving state to Supabase
@@ -279,7 +284,24 @@ function renderHabits() {
 function renderDays() {
     if (!appState) return;
     EL.daysGrid.innerHTML = '';
-    appState.days.forEach(day => {
+    
+    const baseD = new Date(appState.weekStartDate);
+    if (!appState.taskChecks) appState.taskChecks = {};
+
+    appState.days.forEach((day, index) => {
+        const currentD = new Date(baseD);
+        currentD.setDate(currentD.getDate() + index);
+        const y = currentD.getFullYear();
+        const m = String(currentD.getMonth()+1).padStart(2,'0');
+        const dayStr = String(currentD.getDate()).padStart(2,'0');
+        const dateKey = `${y}-${m}-${dayStr}`;
+        const displayDate = `${dayStr}.${m}`;
+
+        if (!appState.taskChecks[dateKey]) {
+            appState.taskChecks[dateKey] = [{ id: generateId(), text: '', done: false }];
+        }
+        const dayTasks = appState.taskChecks[dateKey];
+
         const dayPanel = document.createElement('div');
         dayPanel.className = `panel day-panel ${day.id === appState.activeDayId ? 'active-day' : ''}`;
         if (day.id === appState.activeDayId) {
@@ -304,7 +326,7 @@ function renderDays() {
         const header = document.createElement('div');
         header.className = 'day-header';
         header.innerHTML = `
-            <span class="day-name">${day.name}</span>
+            <span class="day-name">${day.name} <span style="font-size:0.7em; color:var(--text-secondary); font-weight:normal;">${displayDate}</span></span>
             <span class="exp-reward">+${EXP_PER_TASK} EXP</span>
         `;
         dayPanel.appendChild(header);
@@ -312,7 +334,7 @@ function renderDays() {
         const ul = document.createElement('ul');
         ul.className = 'task-list';
         
-        day.tasks.forEach(task => {
+        dayTasks.forEach((task, taskIndex) => {
             const li = document.createElement('li');
             li.className = `task-item ${task.done ? 'completed' : ''}`;
             
@@ -341,12 +363,10 @@ function renderDays() {
                 const checked = e.target.checked;
                 if (checked && !task.done && task.text.trim() !== '') {
                     updateLevelAndExpStore(EXP_PER_TASK, e);
-                    if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0, daysStats: {} };
+                    if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0 };
                     appState.stats.tasksDone = (appState.stats.tasksDone || 0) + 1;
-                    appState.stats.daysStats[day.id] = (appState.stats.daysStats[day.id] || 0) + 1;
                 } else if (!checked && task.done && task.text.trim() !== '') {
                     if (appState.stats && appState.stats.tasksDone > 0) appState.stats.tasksDone--;
-                    if (appState.stats && appState.stats.daysStats[day.id] > 0) appState.stats.daysStats[day.id]--;
                 }
                 task.done = checked;
                 renderDays();
@@ -359,7 +379,7 @@ function renderDays() {
             });
 
             delBtn.addEventListener('click', () => {
-                day.tasks = day.tasks.filter(t => t.id !== task.id);
+                appState.taskChecks[dateKey] = dayTasks.filter((t, i) => i !== taskIndex);
                 renderDays();
                 saveState();
             });
@@ -375,8 +395,8 @@ function renderDays() {
         addBtn.style.borderStyle = 'dashed';
 
         addBtn.addEventListener('click', () => {
-             if (day.tasks.filter(t => t.text.trim() === '').length > 2) return;
-             day.tasks.push({ id: generateId(), text: '', done: false });
+             if (dayTasks.filter(t => t.text.trim() === '').length > 2) return;
+             dayTasks.push({ id: generateId(), text: '', done: false });
              renderDays();
              saveState();
         });
@@ -481,47 +501,47 @@ function renderGoals(type) {
 
 function renderProfile() {
     if (!appState) return;
-    if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0, daysStats: {} };
-    if (!appState.history) appState.history = [];
+    if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0 };
     
     EL.statTasks.innerText = appState.stats.tasksDone || 0;
     EL.statHabits.innerText = appState.stats.habitsDone || 0;
     
     let bestDayName = '-';
-    if (appState.history.length > 0) {
-        const lastWeek = appState.history[appState.history.length - 1];
-        if (lastWeek.daysStats) {
-            let bestDayId = null;
-            let maxTasks = -1;
-            for (const [dayId, count] of Object.entries(lastWeek.daysStats)) {
-                if (count > maxTasks && count > 0) {
-                    maxTasks = count;
-                    bestDayId = dayId;
-                }
+    if (appState.taskChecks) {
+        const today = new Date();
+        const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+        
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            const y = d.getFullYear();
+            const m = String(d.getMonth()+1).padStart(2,'0');
+            const dayStr = String(d.getDate()).padStart(2,'0');
+            const dateKey = `${y}-${m}-${dayStr}`;
+            
+            if (appState.taskChecks[dateKey]) {
+                const doneCount = appState.taskChecks[dateKey].filter(t => t.done).length;
+                dayCounts[d.getDay()] += doneCount;
             }
-            if (bestDayId) {
-                const dayObj = appState.days.find(d => d.id === bestDayId);
-                if (dayObj) bestDayName = dayObj.name;
+        }
+        
+        let maxTasks = -1;
+        let bestDayIndex = -1;
+        for (let j = 0; j < 7; j++) {
+            if (dayCounts[j] > maxTasks && dayCounts[j] > 0) {
+                maxTasks = dayCounts[j];
+                bestDayIndex = j;
             }
+        }
+        
+        if (bestDayIndex !== -1) {
+            const dayNames = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+            bestDayName = dayNames[bestDayIndex];
         }
     }
     EL.statBestDay.innerText = bestDayName;
 
-    EL.historyContainer.innerHTML = '';
-    if (appState.history.length === 0) {
-        EL.historyContainer.innerHTML = '<p class="text-secondary" style="text-align:center; padding: 20px;">Нет завершенных недель.</p>';
-        return;
-    }
-    
-    [...appState.history].reverse().forEach(record => {
-        const item = document.createElement('div');
-        item.className = 'history-item';
-        item.innerHTML = `
-            <div class="history-dates">Неделя: ${record.date}</div>
-            <div class="history-stats text-accent">Выполнено: ${record.tasks} задач, ${record.habits} привычек</div>
-        `;
-        EL.historyContainer.appendChild(item);
-    });
+    EL.historyContainer.innerHTML = '<p class="text-secondary" style="text-align:center; padding: 20px;">Вся история за каждый день сохраняется прямо в Календаре.</p>';
 }
 
 function renderAll() {
@@ -618,60 +638,7 @@ EL.addGoalBtns.forEach(btn => {
     });
 });
 
-EL.btnClear.addEventListener('click', () => {
-    if (!appState) return;
-    if(confirm('Вы уверены, что хотите начать новую неделю? Прогресс будет сохранен в Историю.')) {
-        let weeklyTasks = 0;
-        appState.days.forEach(d => {
-            weeklyTasks += d.tasks.filter(t => t.done).length;
-        });
-        
-        let weeklyHabits = 0;
-        for (let i = 0; i < 7; i++) {
-            const dView = new Date(appState.weekStartDate);
-            dView.setDate(dView.getDate() + i);
-            const y = dView.getFullYear();
-            const m = String(dView.getMonth()+1).padStart(2,'0');
-            const dayStr = String(dView.getDate()).padStart(2,'0');
-            const dateKey = `${y}-${m}-${dayStr}`;
-            
-            if (appState.habitChecks && appState.habitChecks[dateKey]) {
-                weeklyHabits += Object.values(appState.habitChecks[dateKey]).filter(v => v).length;
-            }
-        }
-        
-        const currentDaysStats = appState.stats?.daysStats || {};
-        
-        if (!appState.history) appState.history = [];
-        appState.history.push({
-            date: appState.weekStartDate,
-            tasks: weeklyTasks,
-            habits: weeklyHabits,
-            daysStats: { ...currentDaysStats }
-        });
-        
-        appState.days.forEach(d => {
-            d.tasks = [{ id: generateId(), text: '', done: false }];
-        });
-        
-        if (appState.stats) {
-            appState.stats.daysStats = { 'd1': 0, 'd2': 0, 'd3': 0, 'd4': 0, 'd5': 0, 'd6': 0, 'd7': 0 };
-        }
-        
-        appState.mainFocus = '';
-        
-        const d = new Date(appState.weekStartDate);
-        d.setDate(d.getDate() + 7);
-        appState.weekStartDate = d.toISOString().split('T')[0];
-        appState.activeDayId = 'd1';
-        
-        saveState();
-        renderAll();
-        
-        EL.btnClear.innerText = 'Сохранено!';
-        setTimeout(() => EL.btnClear.innerHTML = '<span class="btn-icon">⚡</span> Очистить неделю', 2000);
-    }
-});
+
 
 EL.closeModalBtn.addEventListener('click', () => {
     EL.levelUpOverlay.classList.add('hidden');
