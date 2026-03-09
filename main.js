@@ -901,7 +901,11 @@ EL.closeModalBtn.addEventListener('click', () => {
 // SUPABASE AUTH FLOW
 // =======================
 
+let isLoggingIn = false;
+
 async function loadUserData(userId) {
+    if (isLoggingIn) return; // Prevent double loads
+    isLoggingIn = true;
     EL.authStatus.innerText = 'Загрузка профиля...';
     try {
         const { data, error } = await supabase
@@ -922,7 +926,7 @@ async function loadUserData(userId) {
         }
         
         // Success
-        EL.authOverlay.classList.add('hidden');
+        EL.authOverlay.style.display = 'none';
         EL.appContent.style.display = 'block';
         renderAll();
         
@@ -931,6 +935,8 @@ async function loadUserData(userId) {
         EL.authError.style.display = 'block';
         EL.authError.innerText = 'Ошибка загрузки данных из облака.';
         EL.authStatus.innerText = '';
+    } finally {
+        isLoggingIn = false;
     }
 }
 
@@ -941,12 +947,13 @@ async function checkSession() {
     if (session) {
         loadUserData(session.user.id);
     } else {
-        EL.authStatus.innerText = '';
-        EL.authOverlay.classList.remove('hidden');
-        EL.appContent.style.display = 'none';
-        
-        // If there was a localStorage payload from before, we could theoretically transfer it,
-        // but explicit login is safer for now.
+        setTimeout(() => {
+            if (!isLoggingIn && !appState) {
+                EL.authStatus.innerText = '';
+                EL.authOverlay.style.display = 'flex';
+                EL.appContent.style.display = 'none';
+            }
+        }, 500);
     }
 }
 
@@ -1001,7 +1008,7 @@ EL.btnSignup.addEventListener('click', async () => {
 EL.btnLogout.addEventListener('click', async () => {
     await supabase.auth.signOut();
     appState = null;
-    EL.authOverlay.classList.remove('hidden');
+    EL.authOverlay.style.display = 'flex';
     EL.appContent.style.display = 'none';
     EL.authEmail.value = '';
     EL.authPassword.value = '';
@@ -1016,7 +1023,7 @@ supabase.auth.onAuthStateChange((event, session) => {
         }
     } else if (event === 'SIGNED_OUT') {
         appState = null;
-        EL.authOverlay.classList.remove('hidden');
+        EL.authOverlay.style.display = 'flex';
         EL.appContent.style.display = 'none';
         EL.authEmail.value = '';
         EL.authPassword.value = '';
