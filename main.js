@@ -288,7 +288,6 @@ function showMedalModal(habitName) {
         renderStats();
     });
 }
-
 function renderHabits() {
     if (!appState) return;
     EL.habitList.innerHTML = '';
@@ -403,6 +402,29 @@ function renderDays() {
             }
         }
         const dayTasks = appState.taskChecks[dateKey];
+        
+        // Smart Time Sorting Logic
+        if (dayTasks && dayTasks.length > 0) {
+            dayTasks.sort((a, b) => {
+                const timeMatchA = a.text.match(/^(\d{1,2}):(\d{2})/);
+                const timeMatchB = b.text.match(/^(\d{1,2}):(\d{2})/);
+                
+                const hasTimeA = timeMatchA !== null;
+                const hasTimeB = timeMatchB !== null;
+                
+                if (hasTimeA && hasTimeB) {
+                    const minutesA = parseInt(timeMatchA[1]) * 60 + parseInt(timeMatchA[2]);
+                    const minutesB = parseInt(timeMatchB[1]) * 60 + parseInt(timeMatchB[2]);
+                    return minutesA - minutesB;
+                } else if (hasTimeA && !hasTimeB) {
+                    return -1; // Time comes first
+                } else if (!hasTimeA && hasTimeB) {
+                    return 1; // Time comes first
+                } else {
+                    return 0; // Both no time, keep original order
+                }
+            });
+        }
 
         const dayPanel = document.createElement('div');
         dayPanel.className = `panel day-panel ${day.id === appState.activeDayId ? 'active-day' : ''}`;
@@ -478,6 +500,11 @@ function renderDays() {
             input.addEventListener('input', (e) => {
                 task.text = e.target.value;
                 saveState();
+            });
+
+            // Re-render and sort when input loses focus
+            input.addEventListener('blur', () => {
+                renderDays();
             });
 
             delBtn.addEventListener('click', () => {
@@ -757,6 +784,7 @@ function renderTemplates() {
         const delBtn = document.createElement('button');
         delBtn.className = 'delete-btn';
         delBtn.innerText = '×';
+        delBtn.style.opacity = '1'; /* Override default CSS opacity 0 */
         delBtn.addEventListener('click', () => {
             appState.templates = appState.templates.filter(temp => temp.id !== t.id);
             saveState();
