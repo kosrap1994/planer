@@ -95,13 +95,21 @@ const EL = {
 // Generate Unique ID
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
+// Helper: Get YYYY-MM-DD in local time
+const formatDateLocal = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
 // Helper: Get Monday of a given date (0 = Sunday, 1 = Monday)
 function getMonday(dateInput) {
     const d = new Date(dateInput);
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     const m = new Date(d.setDate(diff));
-    return m.toISOString().split('T')[0];
+    return formatDateLocal(m);
 }
 
 // Ensure state structure is valid (Migrations)
@@ -395,8 +403,9 @@ function renderDays() {
         if (!appState.taskChecks[dateKey]) {
             appState.taskChecks[dateKey] = [{ id: generateId(), text: '', done: false }];
             
-            // Auto-inject templates for this day of the week
-            if (appState.templates && appState.templates.length > 0) {
+            // Auto-inject templates for this day of the week IF it is Today or in the future
+            const todayStr = formatDateLocal(new Date());
+            if (dateKey >= todayStr && appState.templates && appState.templates.length > 0) {
                 const dayOfWeek = currentD.getDay(); // 0-6
                 const injectedTasks = appState.templates
                     .filter(t => t.days.includes(dayOfWeek))
@@ -798,16 +807,18 @@ function renderTemplates() {
         delBtn.addEventListener('click', () => {
             appState.templates = appState.templates.filter(temp => temp.id !== t.id);
             
-            // Delete instances of this template from future days
-            const todayD = new Date();
-            todayD.setHours(0,0,0,0);
+            // Boundary for deletion: strictly after the currently viewed week.
+            // We get the Monday of the current view and add 7 days to get the next Monday.
+            const weekStart = new Date(appState.weekStartDate);
+            const nextWeekStart = new Date(weekStart);
+            nextWeekStart.setDate(weekStart.getDate() + 7);
+            const nextWeekStartKey = formatDateLocal(nextWeekStart);
             
             if (appState.taskChecks) {
                 Object.keys(appState.taskChecks).forEach(dateKey => {
-                    const d = new Date(dateKey);
-                    d.setHours(0,0,0,0);
-                    // Only remove from today onwards, and only if NOT completed
-                    if (d >= todayD) {
+                    // Only remove from FUTURE weeks (keys >= next Monday),
+                    // and only if the task text matches and is NOT completed.
+                    if (dateKey >= nextWeekStartKey) {
                         appState.taskChecks[dateKey] = appState.taskChecks[dateKey].filter(task => {
                             return !(task.text === t.text && !task.done);
                         });
@@ -817,7 +828,7 @@ function renderTemplates() {
             
             saveState();
             renderTemplates();
-            renderDays(); // Refresh UI to reflect deletions
+            renderDays(); // Refresh UI to reflect templates change if any
         });
         
         div.appendChild(textSpan);
@@ -863,8 +874,10 @@ EL.addTemplateBtn.addEventListener('click', () => {
     EL.newTemplateInput.value = '';
     EL.dayToggles.forEach(cb => cb.checked = false);
     
-    // Auto-inject into the already generated days of the current week
+    // Auto-inject into the already generated days of the current week IF they are Today or in the future
     const baseD = new Date(appState.weekStartDate);
+    const todayStr = formatDateLocal(new Date());
+
     for (let i = 0; i < 7; i++) {
         const currentD = new Date(baseD);
         currentD.setDate(currentD.getDate() + i);
@@ -874,7 +887,8 @@ EL.addTemplateBtn.addEventListener('click', () => {
         const dateKey = `${y}-${m}-${dayStr}`;
         const dayOfWeek = currentD.getDay(); // 0-6
         
-        if (selectedDays.includes(dayOfWeek)) {
+        // Only inject if it's the right day of week AND date is >= today
+        if (selectedDays.includes(dayOfWeek) && dateKey >= todayStr) {
             if (!appState.taskChecks[dateKey]) {
                 appState.taskChecks[dateKey] = [];
             }
