@@ -945,6 +945,7 @@ async function checkSession() {
     const { data: { session }, error } = await supabase.auth.getSession();
     
     if (session) {
+        // Handled by onAuthStateChange usually, but just in case
         loadUserData(session.user.id);
     } else {
         setTimeout(() => {
@@ -1017,7 +1018,8 @@ EL.btnLogout.addEventListener('click', async () => {
 
 // Run Init
 supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+    console.log('Supabase Auth Event:', event); // For debugging live
+    if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
         if (session) {
             loadUserData(session.user.id);
         }
