@@ -18,6 +18,7 @@ const initialState = {
     },
     habitChecks: {}, // Dictionary: 'YYYY-MM-DD' -> { 'h1': true, ... }
     taskChecks: {}, // Dictionary: 'YYYY-MM-DD' -> [{id: '...', text: '...', done: false}, ...]
+    templates: [], // Array: [{id: '...', text: '...', days: [1, 2, 4]}] (0=Sun, 1=Mon...6=Sat)
     monthlyGoals: {}, // Dictionary: 'YYYY-MM' -> [...]
     yearlyGoals: {}, // Dictionary: 'YYYY' -> [...]
     habits: [
@@ -80,7 +81,15 @@ const EL = {
     statTasks: document.getElementById('stat-tasks-done'),
     statHabits: document.getElementById('stat-habits-done'),
     statBestDay: document.getElementById('stat-best-day'),
-    historyContainer: document.getElementById('history-container')
+    historyContainer: document.getElementById('history-container'),
+    // Templates
+    btnOpenTemplates: document.getElementById('btn-open-templates'),
+    templatesOverlay: document.getElementById('templates-overlay'),
+    closeTemplatesBtn: document.getElementById('close-templates-btn'),
+    templatesList: document.getElementById('templates-list'),
+    newTemplateInput: document.getElementById('new-template-input'),
+    addTemplateBtn: document.getElementById('add-template-btn'),
+    dayToggles: document.querySelectorAll('.day-toggle input[type="checkbox"]')
 };
 
 // Generate Unique ID
@@ -108,9 +117,10 @@ function validateState() {
     
     if (!appState.activeDayId) appState.activeDayId = 'd1';
     
-    // Migrate old habits and tasks to date-keys if they don't exist
     if (!appState.taskChecks) appState.taskChecks = {};
     if (!appState.habitChecks) appState.habitChecks = {};
+    if (!appState.templates) appState.templates = [];
+    if (!appState.stats.habitStreaks) appState.stats.habitStreaks = {}; // id -> current streak
     
     const baseD = new Date(appState.weekStartDate);
     appState.days.forEach((dayObj, i) => {
@@ -203,6 +213,82 @@ function renderStats() {
     EL.expFill.style.width = `${percentage}%`;
 }
 
+// Habit Streak Logic
+function calculateHabitStreak(habitId) {
+    if (!appState || !appState.habitChecks) return;
+    
+    let currentStreak = 0;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    // We check backwards from today up to a reasonable limit (e.g. 100 days)
+    for (let i = 0; i < 100; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(d.getDate()).padStart(2, '0');
+        const dateKey = `${y}-${m}-${dayStr}`;
+        
+        // If it's today and not checked, we skip counting but don't break streak
+        // If it's a past day and not checked, streak breaks
+        if (appState.habitChecks[dateKey] && appState.habitChecks[dateKey][habitId]) {
+            currentStreak++;
+            
+            // Give medial notification if we hit exactly 7 days milestone
+            if (currentStreak === 7) {
+                 const habit = appState.habits.find(h => h.id === habitId);
+                 const habitName = habit ? habit.text : 'Привычка';
+                 
+                 // Show modal overlay for medal
+                 showMedalModal(habitName);
+                 
+                 // Update level store with 100 exp bonus for a medal
+                 appState.currentExp += 100;
+                 while (appState.currentExp >= appState.maxExp) {
+                     appState.currentExp -= appState.maxExp;
+                     appState.level += 1;
+                     appState.maxExp = calculateMaxExp(appState.level);
+                 }
+            }
+        } else {
+            // Break if we didn't check it, except allowable gap for today
+            if (i !== 0) {
+                break;
+            }
+        }
+    }
+    
+    if (!appState.stats.habitStreaks) appState.stats.habitStreaks = {};
+    appState.stats.habitStreaks[habitId] = currentStreak;
+}
+
+function showMedalModal(habitName) {
+    // Create an ephemeral modal
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.display = 'flex';
+    overlay.style.zIndex = '9999';
+    
+    const content = document.createElement('div');
+    content.className = 'level-up-modal';
+    content.innerHTML = `
+        <div class="sparkles">🏅</div>
+        <h2>Супер Серия!</h2>
+        <div class="new-level-badge" style="background: linear-gradient(135deg, #ffd700, #ff8c00);">7 Дней Подряд</div>
+        <p>Вы выполняете "${habitName}" целую неделю! Получено +100 EXP.</p>
+        <button class="btn btn-continue" style="margin-top:20px;">Забрать награду</button>
+    `;
+    
+    overlay.appendChild(content);
+    document.body.appendChild(overlay);
+    
+    content.querySelector('.btn-continue').addEventListener('click', () => {
+        overlay.remove();
+        renderStats();
+    });
+}
+
 function renderHabits() {
     if (!appState) return;
     EL.habitList.innerHTML = '';
@@ -256,12 +342,16 @@ function renderHabits() {
             const checked = e.target.checked;
             if (checked && !isDone) {
                 updateLevelAndExpStore(EXP_PER_HABIT, e);
-                if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0, daysStats: {} };
+                if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0 };
                 appState.stats.habitsDone = (appState.stats.habitsDone || 0) + 1;
             } else if (!checked && isDone) {
                 if (appState.stats && appState.stats.habitsDone > 0) appState.stats.habitsDone--;
             }
             appState.habitChecks[dateKey][habit.id] = checked;
+            
+            // Recalculate streak for this habit
+            calculateHabitStreak(habit.id);
+            
             renderHabits();
             saveState();
         });
@@ -299,6 +389,18 @@ function renderDays() {
 
         if (!appState.taskChecks[dateKey]) {
             appState.taskChecks[dateKey] = [{ id: generateId(), text: '', done: false }];
+            
+            // Auto-inject templates for this day of the week
+            if (appState.templates && appState.templates.length > 0) {
+                const dayOfWeek = currentD.getDay(); // 0-6
+                const injectedTasks = appState.templates
+                    .filter(t => t.days.includes(dayOfWeek))
+                    .map(t => ({ id: generateId(), text: t.text, done: false }));
+                
+                if (injectedTasks.length > 0) {
+                    appState.taskChecks[dateKey] = [ ...injectedTasks, ...appState.taskChecks[dateKey] ];
+                }
+            }
         }
         const dayTasks = appState.taskChecks[dateKey];
 
@@ -541,7 +643,35 @@ function renderProfile() {
     }
     EL.statBestDay.innerText = bestDayName;
 
-    EL.historyContainer.innerHTML = '<p class="text-secondary" style="text-align:center; padding: 20px;">Вся история за каждый день сохраняется прямо в Календаре.</p>';
+    // Render Habit Streaks & Medals in history container
+    EL.historyContainer.innerHTML = '<h3 style="margin-top:0; color:var(--text-secondary);">Ваши Серии Привычек</h3>';
+    
+    let hasStreaks = false;
+    if (appState.habits && appState.stats.habitStreaks) {
+        appState.habits.forEach(habit => {
+            const streak = appState.stats.habitStreaks[habit.id] || 0;
+            if (streak > 0) {
+                hasStreaks = true;
+                const streakItem = document.createElement('div');
+                streakItem.className = 'history-item';
+                
+                const medalsCount = Math.floor(streak / 7);
+                const medalsIcons = '🏅'.repeat(medalsCount);
+                
+                streakItem.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                        <span style="font-weight:600;">${habit.text}</span>
+                        <span><span style="color:var(--text-exp); font-weight:bold;">${streak} дней</span> ${medalsIcons}</span>
+                    </div>
+                `;
+                EL.historyContainer.appendChild(streakItem);
+            }
+        });
+    }
+    
+    if (!hasStreaks) {
+        EL.historyContainer.innerHTML += '<p class="text-secondary" style="font-size:0.9em;">Выполните привычку 2 дня подряд, чтобы начать серию!</p>';
+    }
 }
 
 function renderAll() {
@@ -554,6 +684,7 @@ function renderAll() {
     renderGoals('month');
     renderGoals('year');
     renderProfile();
+    renderTemplates();
 }
 
 // Nav Switching
@@ -588,6 +719,100 @@ EL.weekStart.addEventListener('change', (e) => {
     
     saveState();
     renderAll();
+});
+
+// Templates Logic
+function renderTemplates() {
+    if (!appState || !appState.templates) return;
+    EL.templatesList.innerHTML = '';
+    
+    if (appState.templates.length === 0) {
+        EL.templatesList.innerHTML = '<p class="text-secondary" style="font-size:0.9em;">Нет активных шаблонов.</p>';
+        return;
+    }
+    
+    const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    
+    appState.templates.forEach(t => {
+        const div = document.createElement('div');
+        div.className = 'goal-item panel';
+        div.style.marginBottom = '10px';
+        div.style.padding = '10px';
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        
+        const textSpan = document.createElement('span');
+        textSpan.style.flex = '1';
+        textSpan.style.fontWeight = 'bold';
+        textSpan.innerText = t.text;
+        
+        const daysSpan = document.createElement('span');
+        daysSpan.style.color = 'var(--accent-color)';
+        daysSpan.style.marginRight = '15px';
+        daysSpan.style.fontSize = '0.85em';
+        
+        const activeDaysStr = t.days.map(dNum => dayNames[dNum]).join(', ');
+        daysSpan.innerText = activeDaysStr;
+        
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.innerText = '×';
+        delBtn.addEventListener('click', () => {
+            appState.templates = appState.templates.filter(temp => temp.id !== t.id);
+            saveState();
+            renderTemplates();
+        });
+        
+        div.appendChild(textSpan);
+        div.appendChild(daysSpan);
+        div.appendChild(delBtn);
+        EL.templatesList.appendChild(div);
+    });
+}
+
+EL.btnOpenTemplates.addEventListener('click', () => {
+    EL.templatesOverlay.classList.remove('hidden');
+    EL.templatesOverlay.style.display = 'flex';
+    renderTemplates();
+});
+
+EL.closeTemplatesBtn.addEventListener('click', () => {
+    EL.templatesOverlay.classList.add('hidden');
+    EL.templatesOverlay.style.display = 'none';
+});
+
+EL.addTemplateBtn.addEventListener('click', () => {
+    if (!appState) return;
+    const text = EL.newTemplateInput.value.trim();
+    if (!text) return;
+    
+    const selectedDays = [];
+    EL.dayToggles.forEach(cb => {
+        if (cb.checked) selectedDays.push(parseInt(cb.value));
+    });
+    
+    if (selectedDays.length === 0) {
+        alert('Выберите хотя бы один день недели!');
+        return;
+    }
+    
+    if (!appState.templates) appState.templates = [];
+    appState.templates.push({
+        id: generateId(),
+        text: text,
+        days: selectedDays
+    });
+    
+    EL.newTemplateInput.value = '';
+    EL.dayToggles.forEach(cb => cb.checked = false);
+    
+    saveState();
+    renderTemplates();
+    
+    // Suggest refreshing the current week to apply
+    if (confirm('Шаблон успешно добавлен. Обновить текущую неделю, чтобы применить шаблон к еще не открытым дням?')) {
+        renderDays();
+    }
 });
 
 EL.mainFocus.addEventListener('input', (e) => {
