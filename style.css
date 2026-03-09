@@ -365,7 +365,7 @@ h2 {
   padding: 4px;
 }
 
-.habit-item:hover .delete-btn, .task-item:hover .delete-btn {
+.habit-item:hover .delete-btn, .task-item:hover .delete-btn, .goal-item:hover .delete-btn {
   opacity: 1;
 }
 .delete-btn:hover {

@@ -677,7 +677,7 @@ function renderProfile() {
     EL.statBestDay.innerText = bestDayName;
 
     // Render Habit Streaks & Medals in history container
-    EL.historyContainer.innerHTML = '<h3 style="margin-top:0; color:var(--text-secondary);">Ваши Серии Привычек</h3>';
+    EL.historyContainer.innerHTML = '';
     
     let hasStreaks = false;
     if (appState.habits && appState.stats.habitStreaks) {
@@ -797,8 +797,27 @@ function renderTemplates() {
         delBtn.style.opacity = '1'; /* Override default CSS opacity 0 */
         delBtn.addEventListener('click', () => {
             appState.templates = appState.templates.filter(temp => temp.id !== t.id);
+            
+            // Delete instances of this template from future days
+            const todayD = new Date();
+            todayD.setHours(0,0,0,0);
+            
+            if (appState.taskChecks) {
+                Object.keys(appState.taskChecks).forEach(dateKey => {
+                    const d = new Date(dateKey);
+                    d.setHours(0,0,0,0);
+                    // Only remove from today onwards, and only if NOT completed
+                    if (d >= todayD) {
+                        appState.taskChecks[dateKey] = appState.taskChecks[dateKey].filter(task => {
+                            return !(task.text === t.text && !task.done);
+                        });
+                    }
+                });
+            }
+            
             saveState();
             renderTemplates();
+            renderDays(); // Refresh UI to reflect deletions
         });
         
         div.appendChild(textSpan);
