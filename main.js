@@ -922,7 +922,7 @@ async function loadUserData(userId) {
         }
         
         // Success
-        EL.authOverlay.style.display = 'none';
+        EL.authOverlay.classList.add('hidden');
         EL.appContent.style.display = 'block';
         renderAll();
         
@@ -942,7 +942,7 @@ async function checkSession() {
         loadUserData(session.user.id);
     } else {
         EL.authStatus.innerText = '';
-        EL.authOverlay.style.display = 'flex';
+        EL.authOverlay.classList.remove('hidden');
         EL.appContent.style.display = 'none';
         
         // If there was a localStorage payload from before, we could theoretically transfer it,
@@ -1001,7 +1001,7 @@ EL.btnSignup.addEventListener('click', async () => {
 EL.btnLogout.addEventListener('click', async () => {
     await supabase.auth.signOut();
     appState = null;
-    EL.authOverlay.style.display = 'flex';
+    EL.authOverlay.classList.remove('hidden');
     EL.appContent.style.display = 'none';
     EL.authEmail.value = '';
     EL.authPassword.value = '';
@@ -1009,4 +1009,20 @@ EL.btnLogout.addEventListener('click', async () => {
 });
 
 // Run Init
+supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        if (session) {
+            loadUserData(session.user.id);
+        }
+    } else if (event === 'SIGNED_OUT') {
+        appState = null;
+        EL.authOverlay.classList.remove('hidden');
+        EL.appContent.style.display = 'none';
+        EL.authEmail.value = '';
+        EL.authPassword.value = '';
+        EL.authStatus.innerText = '';
+    }
+});
+
+// Initial load check
 checkSession();
