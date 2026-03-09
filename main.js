@@ -1056,6 +1056,4 @@ supabase.auth.onAuthStateChange((event, session) => {
 });
 
 // Initial load check
-document.addEventListener('DOMContentLoaded', () => {
-    checkSession();
-});
+checkSession();
