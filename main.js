@@ -160,6 +160,8 @@ async function saveState() {
                 console.error('Ошибка сохранения в облако:', error);
             } else {
                 console.log('Данные синхронизированы с облаком.');
+                // Create local offline cache
+                localStorage.setItem('planner-offline-state', JSON.stringify(appState));
             }
         }
     }, 1500);
@@ -217,45 +219,41 @@ function renderStats() {
 function calculateHabitStreak(habitId) {
     if (!appState || !appState.habitChecks) return;
     
-    let currentStreak = 0;
-    const today = new Date();
-    today.setHours(0,0,0,0);
+    // 1. Gather all dates where this habit is checked
+    const checkedDates = [];
+    for (const [dateKey, habitsDict] of Object.entries(appState.habitChecks)) {
+        if (habitsDict[habitId]) {
+            checkedDates.push(dateKey); // 'YYYY-MM-DD'
+        }
+    }
     
-    // We check backwards from today up to a reasonable limit (e.g. 100 days)
-    for (let i = 0; i < 100; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const dayStr = String(d.getDate()).padStart(2, '0');
-        const dateKey = `${y}-${m}-${dayStr}`;
+    if (checkedDates.length === 0) {
+        if (!appState.stats.habitStreaks) appState.stats.habitStreaks = {};
+        appState.stats.habitStreaks[habitId] = 0;
+        return;
+    }
+    
+    // 2. Sort dates descending (newest first)
+    checkedDates.sort((a, b) => new Date(b) - new Date(a));
+    
+    // 3. Calculate streak from the most recent date backwards
+    let currentStreak = 1;
+    for (let i = 0; i < checkedDates.length - 1; i++) {
+        const d1 = new Date(checkedDates[i]);
+        const d2 = new Date(checkedDates[i + 1]);
         
-        // If it's today and not checked, we skip counting but don't break streak
-        // If it's a past day and not checked, streak breaks
-        if (appState.habitChecks[dateKey] && appState.habitChecks[dateKey][habitId]) {
+        // Handle timezone/time clearing safely
+        d1.setHours(0,0,0,0);
+        d2.setHours(0,0,0,0);
+        
+        const diffTime = Math.abs(d1 - d2);
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 1) {
             currentStreak++;
-            
-            // Give medial notification if we hit exactly 7 days milestone
-            if (currentStreak === 7) {
-                 const habit = appState.habits.find(h => h.id === habitId);
-                 const habitName = habit ? habit.text : 'Привычка';
-                 
-                 // Show modal overlay for medal
-                 showMedalModal(habitName);
-                 
-                 // Update level store with 100 exp bonus for a medal
-                 appState.currentExp += 100;
-                 while (appState.currentExp >= appState.maxExp) {
-                     appState.currentExp -= appState.maxExp;
-                     appState.level += 1;
-                     appState.maxExp = calculateMaxExp(appState.level);
-                 }
-            }
-        } else {
-            // Break if we didn't check it, except allowable gap for today
-            if (i !== 0) {
-                break;
-            }
+        } else if (diffDays > 1) {
+            // Gap found, streak breaks from the perspective of the newest date
+            break;
         }
     }
     
@@ -346,10 +344,18 @@ function renderHabits() {
             } else if (!checked && isDone) {
                 if (appState.stats && appState.stats.habitsDone > 0) appState.stats.habitsDone--;
             }
+            const oldStreak = (appState.stats && appState.stats.habitStreaks) ? (appState.stats.habitStreaks[habit.id] || 0) : 0;
             appState.habitChecks[dateKey][habit.id] = checked;
             
             // Recalculate streak for this habit
             calculateHabitStreak(habit.id);
+            const newStreak = appState.stats.habitStreaks[habit.id] || 0;
+            
+            // Gamification medal for exactly reaching 7, 14, 21...
+            if (checked && newStreak > 0 && newStreak % 7 === 0 && newStreak > oldStreak) {
+                 showMedalModal(habit.text);
+                 updateLevelAndExpStore(100, e);
+            }
             
             renderHabits();
             saveState();
@@ -941,10 +947,27 @@ async function loadUserData(userId) {
 }
 
 async function checkSession() {
-    EL.authStatus.innerText = 'Проверка сессии...';
-    console.log('App init: checking session via getSession()');
+    // 1. FAST PATH: Offline-First Cache Load
+    try {
+        const offlineState = localStorage.getItem('planner-offline-state');
+        if (offlineState) {
+            console.log('App init: Found offline state cache. Rendering instantly.');
+            appState = JSON.parse(offlineState);
+            validateState();
+            EL.authOverlay.style.display = 'none';
+            EL.appContent.style.display = 'block';
+            renderAll();
+        }
+    } catch (e) {
+        console.warn('Failed to load offline cache:', e);
+    }
+
+    if (!appState) {
+        EL.authStatus.innerText = 'Проверка сессии...';
+        console.log('App init: NO cache, checking session via getSession()');
+    }
     
-    // Manual recovery attempt for GitHub Pages
+    // 2. BACKGROUND PATH: Supabase session recovery
     try {
         const storedAuth = localStorage.getItem('ideal-planner-auth');
         if (storedAuth) {
@@ -972,9 +995,11 @@ async function checkSession() {
         setTimeout(() => {
             if (!isLoggingIn && !appState) {
                 console.log('App init: No session found after 2000ms. Showing login overlay.');
-                EL.authStatus.innerText = '';
-                EL.authOverlay.style.display = 'flex';
-                EL.appContent.style.display = 'none';
+                if (!appState) {
+                    EL.authStatus.innerText = '';
+                    EL.authOverlay.style.display = 'flex';
+                    EL.appContent.style.display = 'none';
+                }
             }
         }, 2000);
     }
@@ -1029,6 +1054,7 @@ EL.btnSignup.addEventListener('click', async () => {
 });
 
 EL.btnLogout.addEventListener('click', async () => {
+    localStorage.removeItem('planner-offline-state'); // Clear cache on exit
     await supabase.auth.signOut();
     appState = null;
     EL.authOverlay.style.display = 'flex';
