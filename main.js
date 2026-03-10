@@ -878,19 +878,21 @@ EL.addTemplateBtn.addEventListener('click', () => {
     const todayStr = formatDateLocal(new Date());
 
     if (appState.taskChecks) {
+        console.log(`[Templates] Bulk-injecting "${text}" into existing taskChecks...`);
+        let count = 0;
         Object.keys(appState.taskChecks).forEach(dateKey => {
             const d = new Date(dateKey);
             const dayOfWeek = d.getDay(); // 0-6
             
-            // Only inject if it's the right day of week AND date is >= today
             if (selectedDays.includes(dayOfWeek) && dateKey >= todayStr) {
-                // Check if this task already exists to avoid duplicates (though highly unlikely for new template)
                 const exists = appState.taskChecks[dateKey].some(t => t.text === text);
                 if (!exists) {
                     appState.taskChecks[dateKey].unshift({ id: generateId(), text: text, done: false });
+                    count++;
                 }
             }
         });
+        console.log(`[Templates] Injected into ${count} future dates.`);
     }
     
     saveState();
