@@ -8,8 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="./assets/index-B7tU3bPK.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-BnVXXyBI.css">
+  <script type="module" crossorigin src="./assets/index-CxLK9RBX.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-CDkru8Ow.css">
 </head>
 <body>
     
@@ -58,14 +58,49 @@
         </header>
 
         <nav class="main-nav">
-            <button class="nav-btn active" data-target="view-week">Неделя</button>
+            <button class="nav-btn active" data-target="view-day">День</button>
+            <button class="nav-btn" data-target="view-week">Неделя</button>
             <button class="nav-btn" data-target="view-month">Месяц</button>
             <button class="nav-btn" data-target="view-year">Год</button>
             <button class="nav-btn" data-target="view-profile">Профиль</button>
             <button class="nav-btn" id="btn-open-templates" style="margin-left: auto; border: 1px solid var(--accent-color); color: var(--accent-color);">📋 Шаблоны Задач</button>
         </nav>
 
-        <section id="view-week" class="view active">
+        <!-- View: Day -->
+        <section id="view-day" class="view active">
+            <div class="day-overview-header">
+                <h1 id="daily-big-date" class="neon-text">--</h1>
+                <p id="daily-subtitle" class="text-secondary" style="font-size: 1.2rem; margin-top: 5px;">--</p>
+            </div>
+            
+            <div class="day-content-grid">
+                <!-- Habits Column -->
+                <div class="panel habits-panel">
+                    <div class="panel-header">
+                        <h2>Привычки на сегодня</h2>
+                        <span class="exp-reward">+5 EXP</span>
+                    </div>
+                    <ul class="habit-list daily-habits-list" id="daily-habits">
+                        <!-- Habits will be generated here -->
+                    </ul>
+                </div>
+
+                <!-- Tasks Column -->
+                <div class="day-panel panel highlight-panel">
+                    <div class="day-header" style="justify-content: space-between;">
+                        <span class="day-name">Задачи на день</span>
+                        <span class="exp-reward">+10 EXP</span>
+                    </div>
+                    <ul class="task-list" id="daily-tasks">
+                        <!-- Tasks will be generated here -->
+                    </ul>
+                    <button id="add-daily-task-btn" class="btn btn-add-task" style="margin-top: 10px; width: 100%; border-style: dashed;">+ Добавить задачу</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- View: Week -->
+        <section id="view-week" class="view">
             <main class="main-grid">
             <aside class="sidebar left-sidebar">
                 <div class="panel highlight-panel">
