@@ -122,7 +122,18 @@ function getMonday(dateInput) {
 
 // Ensure state structure is valid (Migrations)
 function validateState() {
-    if (!appState) appState = JSON.parse(JSON.stringify(initialState));
+    if (!appState) {
+        appState = JSON.parse(JSON.stringify(initialState));
+    }
+    
+    // Migration: Ensure weekStartDate is always a Monday
+    if (appState.weekStartDate) {
+        const parsedDate = new Date(appState.weekStartDate);
+        if (parsedDate.getDay() !== 1) { // 1 = Monday
+            appState.weekStartDate = getMonday(parsedDate);
+        }
+    }
+    
     if (!appState.monthlyGoals || Array.isArray(appState.monthlyGoals)) appState.monthlyGoals = {}; 
     if (!appState.yearlyGoals || Array.isArray(appState.yearlyGoals)) appState.yearlyGoals = {};
     if (!appState.days) appState.days = JSON.parse(JSON.stringify(initialState.days));
