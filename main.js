@@ -73,6 +73,14 @@ const EL = {
     // Multi-tab DOM
     navBtns: document.querySelectorAll('.nav-btn'),
     views: document.querySelectorAll('.view'),
+    
+    // Daily View
+    dailyBigDate: document.getElementById('daily-big-date'),
+    dailySubtitle: document.getElementById('daily-subtitle'),
+    dailyHabits: document.getElementById('daily-habits'),
+    dailyTasks: document.getElementById('daily-tasks'),
+    addDailyTaskBtn: document.getElementById('add-daily-task-btn'),
+    
     monthTitle: document.getElementById('month-view-title'),
     yearTitle: document.getElementById('year-view-title'),
     monthContainer: document.getElementById('monthly-goals-container'),
@@ -366,6 +374,7 @@ function renderHabits() {
             }
             
             renderHabits();
+            renderDayView();
             saveState();
         });
 
@@ -377,6 +386,7 @@ function renderHabits() {
                 });
             }
             renderHabits();
+            renderDayView();
             saveState();
         });
 
@@ -509,6 +519,7 @@ function renderDays() {
                 }
                 task.done = checked;
                 renderDays();
+                renderDayView();
                 saveState();
             });
 
@@ -520,11 +531,13 @@ function renderDays() {
             // Re-render and sort when input loses focus
             input.addEventListener('blur', () => {
                 renderDays();
+                renderDayView();
             });
 
             delBtn.addEventListener('click', () => {
                 appState.taskChecks[dateKey] = dayTasks.filter((t, i) => i !== taskIndex);
                 renderDays();
+                renderDayView();
                 saveState();
             });
         });
@@ -542,6 +555,7 @@ function renderDays() {
              if (dayTasks.filter(t => t.text.trim() === '').length > 2) return;
              dayTasks.push({ id: generateId(), text: '', done: false });
              renderDays();
+             renderDayView();
              saveState();
         });
 
@@ -716,11 +730,191 @@ function renderProfile() {
     }
 }
 
+function renderDayView() {
+    if (!appState) return;
+    
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const dayStr = String(d.getDate()).padStart(2,'0');
+    const dateKey = `${y}-${m}-${dayStr}`;
+    
+    const monthsRU = ['Января', 'Февраля', 'Марта', 'Апреля', 'Мая', 'Июня', 'Июля', 'Августа', 'Сентября', 'Октября', 'Ноября', 'Декабря'];
+    const dayNamesRU = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+    
+    EL.dailyBigDate.innerText = `${d.getDate()} ${monthsRU[d.getMonth()]}`;
+    EL.dailySubtitle.innerText = dayNamesRU[d.getDay()];
+
+    // 1. Render Daily Habits
+    EL.dailyHabits.innerHTML = '';
+    if (!appState.habitChecks) appState.habitChecks = {};
+    if (!appState.habitChecks[dateKey]) appState.habitChecks[dateKey] = {};
+
+    appState.habits.forEach(habit => {
+        const isDone = !!appState.habitChecks[dateKey][habit.id];
+        const li = document.createElement('li');
+        li.className = `habit-item panel ${isDone ? 'completed' : ''}`;
+        
+        const label = document.createElement('label');
+        label.style.display = 'flex';
+        label.style.alignItems = 'flex-start';
+        label.style.gap = '12px';
+        label.style.flex = '1';
+        label.style.cursor = 'pointer';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'custom-checkbox';
+        checkbox.checked = isDone;
+        
+        const span = document.createElement('span');
+        span.className = 'task-text';
+        span.innerText = habit.text;
+
+        label.appendChild(checkbox);
+        label.appendChild(span);
+        
+        li.appendChild(label);
+        
+        checkbox.addEventListener('change', (e) => {
+            const checked = e.target.checked;
+            if (checked && !isDone) {
+                updateLevelAndExpStore(EXP_PER_HABIT, e);
+                if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0 };
+                appState.stats.habitsDone = (appState.stats.habitsDone || 0) + 1;
+            } else if (!checked && isDone) {
+                if (appState.stats && appState.stats.habitsDone > 0) appState.stats.habitsDone--;
+            }
+            const oldStreak = (appState.stats && appState.stats.habitStreaks) ? (appState.stats.habitStreaks[habit.id] || 0) : 0;
+            appState.habitChecks[dateKey][habit.id] = checked;
+            
+            calculateHabitStreak(habit.id);
+            const newStreak = appState.stats.habitStreaks[habit.id] || 0;
+            
+            if (checked && newStreak > 0 && newStreak % 7 === 0 && newStreak > oldStreak) {
+                 showMedalModal(habit.text);
+                 updateLevelAndExpStore(100, e);
+            }
+            
+            renderHabits(); // sync
+            renderDayView();
+            saveState();
+        });
+
+        EL.dailyHabits.appendChild(li);
+    });
+
+    // 2. Render Daily Tasks
+    EL.dailyTasks.innerHTML = '';
+    if (!appState.taskChecks) appState.taskChecks = {};
+    if (!appState.taskChecks[dateKey]) {
+
+        // Auto-inject templates for today if any exist
+        const injectedTasks = [];
+        if (appState.templates && appState.templates.length > 0) {
+            const dayOfWeek = d.getDay(); // 0-6
+            appState.templates.forEach(t => {
+                if (t.days.includes(dayOfWeek)) {
+                    injectedTasks.push({ id: generateId(), text: t.text, done: false });
+                }
+            });
+        }
+        
+        appState.taskChecks[dateKey] = [ ...injectedTasks, { id: generateId(), text: '', done: false } ];
+    }
+    
+    const dayTasks = appState.taskChecks[dateKey];
+    
+    // Smart Time Sorting Logic (shared logic)
+    if (dayTasks && dayTasks.length > 0) {
+        dayTasks.sort((a, b) => {
+            const timeMatchA = a.text.match(/^(\d{1,2}):(\d{2})/);
+            const timeMatchB = b.text.match(/^(\d{1,2}):(\d{2})/);
+            
+            const hasTimeA = timeMatchA !== null;
+            const hasTimeB = timeMatchB !== null;
+            
+            if (hasTimeA && hasTimeB) {
+                const minutesA = parseInt(timeMatchA[1]) * 60 + parseInt(timeMatchA[2]);
+                const minutesB = parseInt(timeMatchB[1]) * 60 + parseInt(timeMatchB[2]);
+                return minutesA - minutesB;
+            } else if (hasTimeA && !hasTimeB) {
+                return -1; // Time comes first
+            } else if (!hasTimeA && hasTimeB) {
+                return 1; // Time comes first
+            } else {
+                return 0; // Both no time, keep original order
+            }
+        });
+    }
+
+    dayTasks.forEach((task, taskIndex) => {
+        const li = document.createElement('li');
+        li.className = `task-item ${task.done ? 'completed' : ''}`;
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'custom-checkbox';
+        checkbox.checked = task.done;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'glass-input task-text';
+        input.value = task.text;
+        input.placeholder = 'Напишите задачу...';
+        if(task.done) input.style.pointerEvents = 'none';
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.innerText = '×';
+
+        li.appendChild(checkbox);
+        li.appendChild(input);
+        li.appendChild(delBtn);
+
+        checkbox.addEventListener('change', (e) => {
+            const checked = e.target.checked;
+            if (checked && !task.done && task.text.trim() !== '') {
+                updateLevelAndExpStore(EXP_PER_TASK, e);
+                if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0 };
+                appState.stats.tasksDone = (appState.stats.tasksDone || 0) + 1;
+            } else if (!checked && task.done && task.text.trim() !== '') {
+                if (appState.stats && appState.stats.tasksDone > 0) appState.stats.tasksDone--;
+            }
+            task.done = checked;
+            renderDays(); // sync
+            renderDayView();
+            saveState();
+        });
+
+        input.addEventListener('input', (e) => {
+            task.text = e.target.value;
+            saveState();
+        });
+
+        // Re-render and sort when input loses focus
+        input.addEventListener('blur', () => {
+            renderDayView();
+            renderDays();
+        });
+
+        delBtn.addEventListener('click', () => {
+            appState.taskChecks[dateKey] = dayTasks.filter((t, i) => i !== taskIndex);
+            renderDays(); // sync
+            renderDayView();
+            saveState();
+        });
+
+        EL.dailyTasks.appendChild(li);
+    });
+}
+
 function renderAll() {
     if (!appState) return;
     renderStats();
     EL.weekStart.value = appState.weekStartDate;
     EL.mainFocus.value = appState.mainFocus;
+    renderDayView();
     renderHabits();
     renderDays();
     renderGoals('month');
@@ -891,6 +1085,26 @@ EL.addTemplateBtn.addEventListener('click', () => {
     
     // Refresh to show injected templates immediately
     renderDays();
+});
+
+EL.addDailyTaskBtn.addEventListener('click', () => {
+    if (!appState) return;
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const dayStr = String(d.getDate()).padStart(2,'0');
+    const dateKey = `${y}-${m}-${dayStr}`;
+    
+    if (!appState.taskChecks[dateKey]) {
+        appState.taskChecks[dateKey] = [];
+    }
+    
+    const dayTasks = appState.taskChecks[dateKey];
+    if (dayTasks.filter(t => t.text.trim() === '').length > 2) return;
+    dayTasks.push({ id: generateId(), text: '', done: false });
+    renderDayView();
+    renderDays(); // keep synced
+    saveState();
 });
 
 EL.mainFocus.addEventListener('input', (e) => {

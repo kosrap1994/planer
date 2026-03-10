@@ -424,6 +424,36 @@ h2 {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Daily View specific */
+.day-overview-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(88, 166, 255, 0.05), transparent);
+  border-radius: 16px;
+  border: 1px solid rgba(88, 166, 255, 0.1);
+}
+
+.neon-text {
+  font-size: 3rem;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 0 20px var(--accent-glow), 0 0 10px rgba(255,255,255,0.5);
+  letter-spacing: -1px;
+}
+
+.day-content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .day-content-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Goals Views */
 .goal-item {
   display: flex;
