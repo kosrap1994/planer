@@ -113,7 +113,13 @@ const formatDateLocal = (date) => {
 
 // Helper: Get Monday of a given date (0 = Sunday, 1 = Monday)
 function getMonday(dateInput) {
-    const d = new Date(dateInput);
+    let d;
+    if (typeof dateInput === 'string' && dateInput.includes('-')) {
+        const [y, m, dayOfMonth] = dateInput.split('-');
+        d = new Date(y, m - 1, dayOfMonth);
+    } else {
+        d = new Date(dateInput);
+    }
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     const m = new Date(d.setDate(diff));
@@ -128,9 +134,10 @@ function validateState() {
     
     // Migration: Ensure weekStartDate is always a Monday
     if (appState.weekStartDate) {
-        const parsedDate = new Date(appState.weekStartDate);
+        const [y, m, d] = appState.weekStartDate.split('-');
+        const parsedDate = new Date(y, m - 1, d);
         if (parsedDate.getDay() !== 1) { // 1 = Monday
-            appState.weekStartDate = getMonday(parsedDate);
+            appState.weekStartDate = getMonday(appState.weekStartDate);
         }
     }
     
@@ -1246,6 +1253,7 @@ async function loadUserData(userId) {
         } else {
             // First time login - populate via backend trigger or local state
             appState = JSON.parse(JSON.stringify(initialState));
+            validateState(); // Validate and correct weekStartDate BEFORE saving
             await saveState(); // Save to init
         }
         
