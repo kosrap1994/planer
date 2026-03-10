@@ -874,27 +874,23 @@ EL.addTemplateBtn.addEventListener('click', () => {
     EL.newTemplateInput.value = '';
     EL.dayToggles.forEach(cb => cb.checked = false);
     
-    // Auto-inject into the already generated days of the current week IF they are Today or in the future
-    const baseD = new Date(appState.weekStartDate);
+    // Bulk-inject into ALL existing taskChecks dates that are Today or in the future
     const todayStr = formatDateLocal(new Date());
 
-    for (let i = 0; i < 7; i++) {
-        const currentD = new Date(baseD);
-        currentD.setDate(currentD.getDate() + i);
-        const y = currentD.getFullYear();
-        const m = String(currentD.getMonth()+1).padStart(2,'0');
-        const dayStr = String(currentD.getDate()).padStart(2,'0');
-        const dateKey = `${y}-${m}-${dayStr}`;
-        const dayOfWeek = currentD.getDay(); // 0-6
-        
-        // Only inject if it's the right day of week AND date is >= today
-        if (selectedDays.includes(dayOfWeek) && dateKey >= todayStr) {
-            if (!appState.taskChecks[dateKey]) {
-                appState.taskChecks[dateKey] = [];
+    if (appState.taskChecks) {
+        Object.keys(appState.taskChecks).forEach(dateKey => {
+            const d = new Date(dateKey);
+            const dayOfWeek = d.getDay(); // 0-6
+            
+            // Only inject if it's the right day of week AND date is >= today
+            if (selectedDays.includes(dayOfWeek) && dateKey >= todayStr) {
+                // Check if this task already exists to avoid duplicates (though highly unlikely for new template)
+                const exists = appState.taskChecks[dateKey].some(t => t.text === text);
+                if (!exists) {
+                    appState.taskChecks[dateKey].unshift({ id: generateId(), text: text, done: false });
+                }
             }
-            // Add to the top of the day
-            appState.taskChecks[dateKey].unshift({ id: generateId(), text: text, done: false });
-        }
+        });
     }
     
     saveState();
