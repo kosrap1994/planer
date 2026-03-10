@@ -977,6 +977,18 @@ EL.navBtns.forEach(btn => {
         const targetViewId = e.currentTarget.dataset.target;
         if (!targetViewId) return; // Skip non-navigation buttons
         
+        if (targetViewId === 'view-week' && appState) {
+            const today = new Date();
+            let dayNum = today.getDay();
+            if (dayNum === 0) dayNum = 7; // Convert Sunday(0) to 7
+            appState.activeDayId = 'd' + dayNum;
+            saveState();
+            renderDays();
+            renderHabits();
+            renderGoals('month');
+            renderGoals('year');
+        }
+        
         EL.navBtns.forEach(b => {
              if (b.dataset.target) b.classList.remove('active');
         });
