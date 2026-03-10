@@ -137,6 +137,7 @@ function validateState() {
     if (!appState.habitChecks) appState.habitChecks = {};
     if (!appState.templates) appState.templates = [];
     if (!appState.stats.habitStreaks) appState.stats.habitStreaks = {}; // id -> current streak
+    if (!appState.stats.expRewarded) appState.stats.expRewarded = {}; // `${dateKey}_${id}` -> true
     
     const baseD = new Date(appState.weekStartDate);
     appState.days.forEach((dayObj, i) => {
@@ -353,12 +354,20 @@ function renderHabits() {
         
         checkbox.addEventListener('change', (e) => {
             const checked = e.target.checked;
+            const rewardKey = `${dateKey}_${habit.id}`;
+            
             if (checked && !isDone) {
-                updateLevelAndExpStore(EXP_PER_HABIT, e);
-                if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0 };
+                if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0, expRewarded: {} };
+                if (!appState.stats.expRewarded) appState.stats.expRewarded = {};
+                
+                if (!appState.stats.expRewarded[rewardKey]) {
+                    updateLevelAndExpStore(EXP_PER_HABIT, e);
+                    appState.stats.expRewarded[rewardKey] = true;
+                }
                 appState.stats.habitsDone = (appState.stats.habitsDone || 0) + 1;
             } else if (!checked && isDone) {
                 if (appState.stats && appState.stats.habitsDone > 0) appState.stats.habitsDone--;
+                // Note: We do NOT deduct EXP and we do NOT reset expRewarded to prevent infinite farming loops.
             }
             const oldStreak = (appState.stats && appState.stats.habitStreaks) ? (appState.stats.habitStreaks[habit.id] || 0) : 0;
             appState.habitChecks[dateKey][habit.id] = checked;
@@ -510,9 +519,16 @@ function renderDays() {
 
             checkbox.addEventListener('change', (e) => {
                 const checked = e.target.checked;
+                const rewardKey = `${dateKey}_${task.id}`;
+                
                 if (checked && !task.done && task.text.trim() !== '') {
-                    updateLevelAndExpStore(EXP_PER_TASK, e);
-                    if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0 };
+                    if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0, expRewarded: {} };
+                    if (!appState.stats.expRewarded) appState.stats.expRewarded = {};
+                    
+                    if (!appState.stats.expRewarded[rewardKey]) {
+                        updateLevelAndExpStore(EXP_PER_TASK, e);
+                        appState.stats.expRewarded[rewardKey] = true;
+                    }
                     appState.stats.tasksDone = (appState.stats.tasksDone || 0) + 1;
                 } else if (!checked && task.done && task.text.trim() !== '') {
                     if (appState.stats && appState.stats.tasksDone > 0) appState.stats.tasksDone--;
@@ -630,9 +646,16 @@ function renderGoals(type) {
         
         cb.addEventListener('change', (e) => {
             const checked = e.target.checked;
+            const rewardKey = `${key}_${goal.id}`;
+            
             if (checked && !goal.done && goal.text.trim() !== '') {
-                updateLevelAndExpStore(50, e);
-                if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0, daysStats: {} };
+                if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0, expRewarded: {} };
+                if (!appState.stats.expRewarded) appState.stats.expRewarded = {};
+                
+                if (!appState.stats.expRewarded[rewardKey]) {
+                    updateLevelAndExpStore(50, e);
+                    appState.stats.expRewarded[rewardKey] = true;
+                }
                 appState.stats.tasksDone = (appState.stats.tasksDone || 0) + 1;
             } else if (!checked && goal.done && goal.text.trim() !== '') {
                  if (appState.stats && appState.stats.tasksDone > 0) appState.stats.tasksDone--;
@@ -778,9 +801,16 @@ function renderDayView() {
         
         checkbox.addEventListener('change', (e) => {
             const checked = e.target.checked;
+            const rewardKey = `${dateKey}_${habit.id}`;
+            
             if (checked && !isDone) {
-                updateLevelAndExpStore(EXP_PER_HABIT, e);
-                if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0 };
+                if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0, expRewarded: {} };
+                if (!appState.stats.expRewarded) appState.stats.expRewarded = {};
+                
+                if (!appState.stats.expRewarded[rewardKey]) {
+                    updateLevelAndExpStore(EXP_PER_HABIT, e);
+                    appState.stats.expRewarded[rewardKey] = true;
+                }
                 appState.stats.habitsDone = (appState.stats.habitsDone || 0) + 1;
             } else if (!checked && isDone) {
                 if (appState.stats && appState.stats.habitsDone > 0) appState.stats.habitsDone--;
@@ -874,9 +904,16 @@ function renderDayView() {
 
         checkbox.addEventListener('change', (e) => {
             const checked = e.target.checked;
+            const rewardKey = `${dateKey}_${task.id}`;
+            
             if (checked && !task.done && task.text.trim() !== '') {
-                updateLevelAndExpStore(EXP_PER_TASK, e);
-                if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0 };
+                if (!appState.stats) appState.stats = { tasksDone: 0, habitsDone: 0, expRewarded: {} };
+                if (!appState.stats.expRewarded) appState.stats.expRewarded = {};
+                
+                if (!appState.stats.expRewarded[rewardKey]) {
+                    updateLevelAndExpStore(EXP_PER_TASK, e);
+                    appState.stats.expRewarded[rewardKey] = true;
+                }
                 appState.stats.tasksDone = (appState.stats.tasksDone || 0) + 1;
             } else if (!checked && task.done && task.text.trim() !== '') {
                 if (appState.stats && appState.stats.tasksDone > 0) appState.stats.tasksDone--;
