@@ -807,18 +807,13 @@ function renderTemplates() {
         delBtn.addEventListener('click', () => {
             appState.templates = appState.templates.filter(temp => temp.id !== t.id);
             
-            // Boundary for deletion: strictly after the currently viewed week.
-            // We get the Monday of the current view and add 7 days to get the next Monday.
-            const weekStart = new Date(appState.weekStartDate);
-            const nextWeekStart = new Date(weekStart);
-            nextWeekStart.setDate(weekStart.getDate() + 7);
-            const nextWeekStartKey = formatDateLocal(nextWeekStart);
+            const todayStr = formatDateLocal(new Date());
             
             if (appState.taskChecks) {
                 Object.keys(appState.taskChecks).forEach(dateKey => {
-                    // Only remove from FUTURE weeks (keys >= next Monday),
+                    // Only remove from dates STRICTLY AFTER today,
                     // and only if the task text matches and is NOT completed.
-                    if (dateKey >= nextWeekStartKey) {
+                    if (dateKey > todayStr) {
                         appState.taskChecks[dateKey] = appState.taskChecks[dateKey].filter(task => {
                             return !(task.text === t.text && !task.done);
                         });
