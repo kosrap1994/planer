@@ -3,7 +3,9 @@
 // =====================================================
 
 import { S, load, save, uid, todayKey, keyOffset, mondayOf, parseKey, dayTasks,
-         removeTemplateTasks, MONTHS, MONTHS_NOM, WEEKDAYS, WEEKDAYS_SHORT, pad } from './state.js';
+         removeTemplateTasks, overwriteFromCloud,
+         MONTHS, MONTHS_NOM, WEEKDAYS, WEEKDAYS_SHORT, pad } from './state.js';
+import { cloudConfigured, getUser, signIn, signUp, signOut, pullState, pushState } from './cloud.js';
 import { icon, coinIcon, getSprite, paintStatic, AURAS, TIERS, tierForLevel,
          startAuraLoop, resetParticles, CHARACTERS,
          HAIRSTYLES, SKIN_TONES, EYE_COLORS, HAIR_COLORS } from './pixel.js';
@@ -22,6 +24,7 @@ let viewMonday = mondayOf(todayKey());
 let pickedIcon = CUSTOM_ICON_KEYS[0];
 let shopAura = 'gold';                // предпросмотр свечения в магазине
 let shopTier = 3;
+let cloudUser = null;                 // текущий пользователь Supabase (null = гость)
 
 // ---------- Анимации: флоаты, тосты, модалки ----------
 
@@ -400,6 +403,67 @@ function renderGoals() {
     </div>`;
 }
 
+// ---------- Аккаунт и синхронизация ----------
+
+function accountCardHTML() {
+    if (!cloudConfigured()) return '';
+    if (cloudUser) {
+        return `<div class="card">
+            <div class="card-head"><span class="card-label">Аккаунт</span><span class="muted small">синхронизация включена</span></div>
+            <p class="small">${esc(cloudUser.email)} — герой сохраняется в облако и доступен с любого устройства.</p>
+            <div class="acc-row">
+                <button class="btn btn-sm" data-act="acc-logout">Выйти</button>
+                <span class="muted small" id="acc-status"></span>
+            </div>
+        </div>`;
+    }
+    return `<div class="card">
+        <div class="card-head"><span class="card-label">Аккаунт</span><span class="muted small">гость — герой только в этом браузере</span></div>
+        <p class="muted small" style="margin-bottom:10px;">Войди, чтобы играть одним героем с телефона и компьютера.</p>
+        <div class="acc-form">
+            <input id="acc-email" class="input" type="email" placeholder="Почта" autocomplete="email">
+            <input id="acc-pass" class="input" type="password" placeholder="Пароль (мин. 6 символов)" autocomplete="current-password">
+        </div>
+        <div class="acc-row">
+            <button class="btn btn-sm btn-primary" data-act="acc-login">Войти</button>
+            <button class="btn btn-sm" data-act="acc-signup">Регистрация</button>
+            <span class="muted small" id="acc-status"></span>
+        </div>
+    </div>`;
+}
+
+function accStatus(msg, isError) {
+    const el = $('acc-status');
+    if (el) {
+        el.innerText = msg;
+        el.style.color = isError ? 'var(--red)' : 'var(--green)';
+    }
+}
+
+// После входа: облако главнее локального; если облако пустое — заливаем локального героя
+async function syncOnLogin() {
+    try {
+        const cloudState = await pullState(cloudUser.id);
+        if (cloudState && cloudState.created) {
+            overwriteFromCloud(cloudState);
+            recalcActivityStreak();
+            toast('star', 'Герой загружен из облака', esc(S.charName || ''));
+        } else {
+            await pushState(cloudUser.id, S);
+            toast('star', 'Герой сохранён в облако', 'Теперь он с тобой на любом устройстве');
+        }
+        rerender();
+    } catch (e) {
+        accStatus('Ошибка синхронизации: ' + (e.message || e), true);
+    }
+}
+
+async function initCloud() {
+    if (!cloudConfigured()) return;
+    cloudUser = await getUser();
+    if (currentView === 'view-character') renderCharacter();
+}
+
 // ---------- Экран «Персонаж» ----------
 
 function statBlock(iconKey, name, value, hint, cls) {
@@ -503,7 +567,9 @@ function renderCharacter() {
                 </div>`;
             }).join('')}
         </div>
-    </div>`;
+    </div>
+
+    ${accountCardHTML()}`;
 
     paintStatic('char-scene', spriteOpts());
 }
@@ -1018,6 +1084,38 @@ function bindEvents() {
             S.customRewards.push({ id: 'cr_' + uid(), name, price, icon: pickedIcon, kind: 'reward' });
             save(); renderShop();
         }
+        else if (act === 'acc-login' || act === 'acc-signup') {
+            const email = ($('acc-email').value || '').trim();
+            const pass = $('acc-pass').value || '';
+            if (!email || pass.length < 6) {
+                accStatus('Укажи почту и пароль от 6 символов', true);
+                return;
+            }
+            accStatus(act === 'acc-login' ? 'Входим...' : 'Регистрируем...');
+            (async () => {
+                try {
+                    const data = act === 'acc-login'
+                        ? await signIn(email, pass)
+                        : await signUp(email, pass);
+                    if (!data.session) {
+                        accStatus('Аккаунт создан! Подтверди почту по письму и нажми «Войти».');
+                        return;
+                    }
+                    cloudUser = data.user;
+                    await syncOnLogin();
+                } catch (err) {
+                    accStatus((err.message || 'Ошибка'), true);
+                }
+            })();
+        }
+        else if (act === 'acc-logout') {
+            (async () => {
+                await signOut();
+                cloudUser = null;
+                toast('shield', 'Вышел из аккаунта', 'Герой остаётся в этом браузере');
+                rerender();
+            })();
+        }
     });
 
     content.addEventListener('change', e => {
@@ -1101,6 +1199,9 @@ function init() {
 
     // Первый запуск — создание персонажа
     if (!S.created) openCreator(true);
+
+    // Аккаунт: проверяем сессию в фоне
+    initCloud();
 
     if (decay.loss > 0) {
         modal(`<div class="modal-icon">${icon('moon', 72)}</div>

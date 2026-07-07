@@ -2,6 +2,8 @@
 // state.js — состояние, персист в localStorage, даты
 // =====================================================
 
+import { schedulePush } from './cloud.js';
+
 const KEY = 'planner-v2-state';
 
 export const pad = n => String(n).padStart(2, '0');
@@ -122,7 +124,14 @@ export function save() {
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
         localStorage.setItem(KEY, JSON.stringify(S));
+        schedulePush(() => S); // в облако, если пользователь вошёл в аккаунт
     }, 300);
+}
+
+// Заменить локального героя на героя из облака
+export function overwriteFromCloud(cloudState) {
+    localStorage.setItem(KEY, JSON.stringify(cloudState));
+    return load();
 }
 
 // Задачи дня с автодобавлением из шаблонов.

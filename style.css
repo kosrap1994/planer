@@ -22,6 +22,11 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html {
+  touch-action: manipulation; /* убирает зум по двойному тапу на мобильных */
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   font-family: var(--font);
   background: var(--bg);
@@ -789,6 +794,15 @@ button { font-family: var(--font); color: var(--text); }
 
 #creator-save { justify-content: center; margin-top: 6px; }
 
+/* ---------- Аккаунт ---------- */
+
+.acc-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; max-width: 560px; }
+.acc-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .acc-form { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 640px) {
   .creator-grid { grid-template-columns: 1fr; }
   .creator-preview { max-width: 210px; margin: 0 auto; }
@@ -828,6 +842,8 @@ button { font-family: var(--font); color: var(--text); }
   .nav-item.active { border-left: none; border-top-color: var(--accent); }
   .side-char { display: none; }
   .content { padding: 16px 12px 90px; }
+  /* 16px в полях ввода — iOS не приближает страницу при фокусе */
+  .input, .row-text { font-size: 16px; }
   .grid-2, .char-grid, .aura-shop { grid-template-columns: 1fr; }
   .hud { padding: 10px 12px; gap: 10px; }
   .hud-exp-numbers { display: none; }
