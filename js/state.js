@@ -46,7 +46,7 @@ export const uid = () => Math.random().toString(36).substr(2, 9);
 function initial() {
     return {
         v: 4,
-        level: 1, exp: 0, maxExp: 100, coins: 150, crystals: 0,
+        level: 1, exp: 0, maxExp: 100, coins: 0, crystals: 0,
         gender: 'm', aura: 'gold', ownedAuras: ['gold'],
         created: false,   // персонаж ещё не создан — показать окно создания
         charName: '',
