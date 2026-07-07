@@ -53,12 +53,19 @@ function initial() {
         appearance: { hair: 'classic', hairColor: 'brown', eyeColor: 'blue', skin: 'light' },
         customRewards: [], purchases: [], hiddenShop: [],
         habits: [
-            { id: 'h1', text: 'Пить воду (2л)' },
-            { id: 'h2', text: 'Чтение (20 мин)' },
-            { id: 'h3', text: 'Спорт / Разминка' }
+            { id: 'h1', text: 'Зарядка' },
+            { id: 'h2', text: 'Прогулка 5к шагов' },
+            { id: 'h3', text: 'Не курить' }
         ],
         habitChecks: {},   // 'YYYY-MM-DD' -> {habitId: true}
-        tasks: {},         // 'YYYY-MM-DD' -> [{id, text, done, boss, tpl}]
+        // Стартовые задачи-онбординг на сегодня
+        tasks: {
+            [todayKey()]: [
+                { id: uid(), text: 'Изучить планер', done: false, boss: false },
+                { id: uid(), text: 'Установить шаблоны в меню «Неделя»', done: false, boss: false },
+                { id: uid(), text: 'Посетить «Магазин»', done: false, boss: false }
+            ]
+        },                 // 'YYYY-MM-DD' -> [{id, text, done, boss, tpl}]
         templates: [],     // [{id, text, days:[1..0]}]
         tplInjected: {},   // 'YYYY-MM-DD' -> true
         weekFocus: {},     // mondayKey -> {text, reward, done}
