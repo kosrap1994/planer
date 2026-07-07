@@ -3,231 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ideal RPG Planner</title>
-    <!-- Add Supabase client indirectly through main.js (we'll make it a module) -->
+    <title>planner v2</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-    
-    <!-- Auth Modal -->
-    <div id="auth-overlay" class="modal-overlay" style="display: flex;">
-        <div class="modal-content auth-panel">
-            <h2 id="auth-title">Вход в систему</h2>
-            <p class="text-secondary" style="margin-bottom: 20px;">Для синхронизации данных необходим аккаунт.</p>
-            
-            <input type="email" id="auth-email" class="glass-input" placeholder="Email" style="width: 100%; margin-bottom: 10px;">
-            <input type="password" id="auth-password" class="glass-input" placeholder="Пароль" style="width: 100%; margin-bottom: 20px;">
-            
-            <div id="auth-error" style="color: #ff6b6b; margin-bottom: 10px; font-size: 0.9em; display: none;"></div>
-            
-            <button id="btn-login" class="btn" style="width: 100%; margin-bottom: 10px;">Войти</button>
-            <button id="btn-signup" class="btn" style="width: 100%; background: transparent; border: 1px solid var(--accent-color);">Зарегистрироваться</button>
-            
-            <div style="margin-top: 15px; text-align: center; color: var(--text-secondary); font-size: 0.85em;">
-                <span id="auth-status">Ожидание...</span>
-            </div>
-        </div>
-    </div>
 
-    <div id="particle-container"></div>
-    <div class="app-container" id="app-content" style="display: none;">
-        
-        <header class="header neon-border">
-            <div class="header-content">
-                <div class="user-stats">
-                    <div class="level-badge">LVL <span id="user-level">1</span></div>
-                    <div class="exp-container">
-                        <div class="exp-info">
-                            <span class="exp-label">Опыт (EXP)</span>
-                            <span class="exp-numbers"><span id="current-exp">0</span> / <span id="max-exp">100</span></span>
-                        </div>
-                        <div class="exp-bar-bg">
-                            <div class="exp-bar-fill" id="exp-fill"></div>
-                            <div class="exp-glow"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="header-controls">
-                    <h1 class="title">Идеальный Планер</h1>
-                </div>
+<div class="layout">
+    <aside class="sidebar">
+        <nav class="side-nav" id="side-nav">
+            <button class="nav-item active" data-view="view-today"><span class="nav-ico" data-ico="sun"></span><span class="nav-label">Сегодня</span></button>
+            <button class="nav-item" data-view="view-week"><span class="nav-ico" data-ico="calendar"></span><span class="nav-label">Неделя</span></button>
+            <button class="nav-item" data-view="view-goals"><span class="nav-ico" data-ico="target"></span><span class="nav-label">Цели</span></button>
+            <button class="nav-item" data-view="view-character"><span class="nav-ico" data-ico="helmet"></span><span class="nav-label">Персонаж</span></button>
+            <button class="nav-item" data-view="view-shop"><span class="nav-ico" data-ico="bag"></span><span class="nav-label">Магазин</span></button>
+        </nav>
+        <button class="side-char" id="side-char" data-view="view-character" title="Открыть персонажа">
+            <canvas id="side-char-canvas" width="66" height="87" class="px"></canvas>
+            <div class="side-char-info">
+                <span class="side-char-lvl" id="side-char-lvl">LVL 1</span>
+                <span class="side-char-tier" id="side-char-tier"></span>
+            </div>
+        </button>
+    </aside>
+
+    <div class="main">
+        <header class="hud">
+            <div class="hud-level" id="hud-level">LVL 1</div>
+            <div class="hud-exp">
+                <div class="hud-exp-numbers"><span id="hud-exp-text">0 / 100</span></div>
+                <div class="bar bar-exp"><div class="bar-fill" id="hud-exp-fill"></div></div>
+            </div>
+            <div class="hud-right">
+                <div class="hud-chip hud-coins" id="hud-coins" title="Монеты"></div>
             </div>
         </header>
 
-        <nav class="main-nav">
-            <button class="nav-btn active" data-target="view-day">День</button>
-            <button class="nav-btn" data-target="view-week">Неделя</button>
-            <button class="nav-btn" data-target="view-month">Месяц</button>
-            <button class="nav-btn" data-target="view-year">Год</button>
-            <button class="nav-btn" data-target="view-profile">Профиль</button>
-            <button class="nav-btn" id="btn-open-templates" style="margin-left: auto; border: 1px solid var(--accent-color); color: var(--accent-color);">📋 Шаблоны Задач</button>
-        </nav>
-
-        <!-- View: Day -->
-        <section id="view-day" class="view active">
-            <div class="day-overview-header">
-                <h1 id="daily-big-date" class="neon-text">--</h1>
-                <p id="daily-subtitle" class="text-secondary" style="font-size: 1.2rem; margin-top: 5px;">--</p>
-            </div>
-            
-            <div class="day-content-grid">
-                <!-- Tasks Column -->
-                <div class="day-panel panel highlight-panel">
-                    <div class="day-header" style="justify-content: space-between;">
-                        <span class="day-name">Задачи на день</span>
-                        <span class="exp-reward">+10 EXP</span>
-                    </div>
-                    <ul class="task-list" id="daily-tasks">
-                        <!-- Tasks will be generated here -->
-                    </ul>
-                    <button id="add-daily-task-btn" class="btn btn-add-task" style="margin-top: 10px; width: 100%; border-style: dashed;">+ Добавить задачу</button>
-                </div>
-                
-                <!-- Habits Column -->
-                <div class="panel habits-panel">
-                    <div class="panel-header">
-                        <h2>Привычки на сегодня</h2>
-                        <span class="exp-reward">+5 EXP</span>
-                    </div>
-                    <ul class="habit-list daily-habits-list" id="daily-habits">
-                        <!-- Habits will be generated here -->
-                    </ul>
-                </div>
-            </div>
-        </section>
-
-        <!-- View: Week -->
-        <section id="view-week" class="view">
-            <main class="main-grid">
-            <aside class="sidebar left-sidebar">
-                <div class="panel highlight-panel">
-                    <h2>Календарь-Навигатор</h2>
-                    <input type="date" id="week-start-date" class="glass-input date-input" title="Выберите день, чтобы перейти к нему">
-                </div>
-                
-                <div class="panel focus-panel">
-                    <h2>Основное внимание</h2>
-                    <textarea id="main-focus" class="glass-input textarea" placeholder="Главные цели на эту неделю..." rows="4"></textarea>
-                </div>
-
-                <div class="panel habits-panel">
-                    <div class="panel-header">
-                        <h2 id="habit-panel-title">Привычки (Понедельник)</h2>
-                        <span class="exp-reward">+5 EXP</span>
-                    </div>
-                    <ul class="habit-list" id="habit-list">
-                        <!-- Habits will be generated here -->
-                    </ul>
-                    <div class="add-item-form">
-                        <input type="text" id="new-habit-input" class="glass-input mini-input" placeholder="Новая привычка...">
-                        <button id="add-habit-btn" class="btn btn-add">+</button>
-                    </div>
-                </div>
-            </aside>
-
-            <div class="days-grid" id="days-grid">
-                <!-- Days will be generated here -->
-            </div>
-            </main>
-        </section>
-
-        <!-- View: Month -->
-        <section id="view-month" class="view">
-            <div class="panel highlight-panel">
-                <h2 id="month-view-title">Цели на месяц</h2>
-                <p class="text-secondary">Здесь ваши глобальные задачи на месяц, выбранный в Календаре.</p>
-                <div id="monthly-goals-container"></div>
-                <button class="btn btn-add-task add-goal-btn" data-type="month" style="margin-top: 20px; border-style: dashed;">+ Добавить цель на месяц</button>
-            </div>
-        </section>
-
-        <!-- View: Year -->
-        <section id="view-year" class="view">
-            <div class="panel focus-panel">
-                <h2 id="year-view-title">Цели на год</h2>
-                <p class="text-secondary">Здесь ваши стратегические задачи на выбранный год.</p>
-                <div id="yearly-goals-container"></div>
-                <button class="btn btn-add-task add-goal-btn" data-type="year" style="margin-top: 20px; border-style: dashed;">+ Добавить цель на год</button>
-            </div>
-        </section>
-
-        <!-- View: Profile & Stats -->
-        <section id="view-profile" class="view">
-            <div class="profile-grid">
-                <div class="panel stats-panel">
-                    <h2>Общая Статистика</h2>
-                    <div class="stats-grid">
-                        <div class="stat-box">
-                            <span class="stat-value text-accent" id="stat-tasks-done">0</span>
-                            <span class="stat-label">Задач<br>выполнено</span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-value text-exp" id="stat-habits-done">0</span>
-                            <span class="stat-label">Привычек<br>выполнено</span>
-                        </div>
-                        <div class="stat-box">
-                            <span class="stat-value text-level" id="stat-best-day">-</span>
-                            <span class="stat-label">Лучший<br>день</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="panel history-panel">
-                    <h2>Серии Привычек</h2>
-                    <div id="history-container" class="history-list">
-                        <!-- History items generated here -->
-                    </div>
-                </div>
-            </div>
-            <button id="btn-logout" class="btn" style="margin-top: 20px; width: 100%; border: 1px solid var(--panel-border); color: var(--text-secondary); background: transparent;">🚪 Выйти из аккаунта</button>
-        </section>
+        <main class="content">
+            <section id="view-today" class="view active"></section>
+            <section id="view-week" class="view"></section>
+            <section id="view-goals" class="view"></section>
+            <section id="view-character" class="view"></section>
+            <section id="view-shop" class="view"></section>
+        </main>
     </div>
-    
-    <div id="level-up-overlay" class="hidden">
-        <div class="level-up-modal">
-            <div class="sparkles">✨</div>
-            <h2>LEVEL UP!</h2>
-            <div class="new-level-badge">Уровень <span id="modal-level">2</span></div>
-            <p>Вы стали еще продуктивнее!</p>
-            <button class="btn btn-continue" id="close-modal-btn">Продолжить</button>
-        </div>
-    </div>
+</div>
 
-    <!-- Task Templates Modal -->
-    <div id="templates-overlay" class="hidden modal-overlay">
-        <div class="modal-content" style="position: relative;">
-            <button type="button" id="close-templates-btn" style="position: absolute; right: 15px; top: 15px; font-size: 24px; background: transparent; border: none; color: var(--text-secondary); cursor: pointer; transition: color 0.2s;">×</button>
-            <h2>Шаблоны Регулярных Задач</h2>
-            <p class="text-secondary" style="margin-bottom: 20px;">Задачи будут автоматически появляться в календаре в выбранные дни.</p>
-            
-            <div id="templates-list" style="margin-bottom: 20px; max-height: 250px; overflow-y: auto;">
-                <!-- Templates will be rendered here -->
-            </div>
-            
-            <div class="panel" style="padding: 15px; border-style: dashed;">
-                <h3 style="margin-top: 0; font-size: 1.1em; margin-bottom: 10px;">Создать новый шаблон</h3>
-                <input type="text" id="new-template-input" class="glass-input" placeholder="Название задачи (например: Зал, Уборка)..." style="width: 100%; margin-bottom: 15px;">
-                
-                <div style="display: flex; gap: 5px; justify-content: space-between; margin-bottom: 15px;">
-                    <label class="day-toggle"><input type="checkbox" value="1"> <span>Пн</span></label>
-                    <label class="day-toggle"><input type="checkbox" value="2"> <span>Вт</span></label>
-                    <label class="day-toggle"><input type="checkbox" value="3"> <span>Ср</span></label>
-                    <label class="day-toggle"><input type="checkbox" value="4"> <span>Чт</span></label>
-                    <label class="day-toggle"><input type="checkbox" value="5"> <span>Пт</span></label>
-                    <label class="day-toggle"><input type="checkbox" value="6"> <span>Сб</span></label>
-                    <label class="day-toggle"><input type="checkbox" value="0"> <span>Вс</span></label>
-                </div>
-                
-                <button type="button" id="add-template-btn" class="btn" style="width: 100%;">+ Добавить шаблон</button>
-            </div>
-        </div>
-    </div>
+<div id="float-container"></div>
+<div id="toast-container"></div>
+<div id="modal-root"></div>
 
-    <!-- EXP floating numbers container -->
-    <div id="floating-exp-container"></div>
-
-    <script type="module" src="./main.js"></script>
+<script type="module" src="./js/app.js"></script>
 </body>
 </html>
