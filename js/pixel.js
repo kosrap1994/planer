@@ -411,6 +411,10 @@ export const ICONS = {
         "............", ".....o......", "....oo..o...", "....ooo.o...", "...roooooo..",
         "..rooooooo..", "..roooyyoo..", ".rooyyyyoo..", ".rooyyyyooo.", "..ooyyyyoo..",
         "...oooooo...", "............" ] },
+    menu: { pal: { w:'#7C8BA1' }, map: [
+        "............", "............", "..wwwwwwww..", "............", "..wwwwwwww..",
+        "............", "..wwwwwwww..", "............", "............", "............",
+        "............", "............" ] },
     gem: { pal: { p:'#7DE0FF', d:'#1E7FB8', w:'#EAFBFF' }, map: [
         "............", "..pppppppp..", ".pwppppppd..", ".pwpppppdd..", "..pppppdd...",
         "..ppppppd...", "...ppppd....", "...pppd.....", "....ppd.....", ".....p......",

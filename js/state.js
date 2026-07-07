@@ -78,6 +78,7 @@ function initial() {
         rewarded: {},      // антифарм: `${date}_${id}` -> true
         bossRewarded: {},  // 'w_<monday>' / 'm_<ym>' / 'y_<year>' -> true
         ach: {},           // achievementId -> dateKey
+        weekExp: {},       // mondayKey -> EXP, набранный за неделю (для Топ-50)
         activity: {},      // 'YYYY-MM-DD' -> {t: n, h: n}
         totals: { tasks: 0, habits: 0, purchases: 0 },
         trophies: { medals: 0, bossDay: 0, bossWeek: 0, bossMonth: 0, bossYear: 0, bestHabitStreak: 0 },
@@ -103,7 +104,7 @@ export function load() {
     if (!S.appearance || typeof S.appearance !== 'object') S.appearance = base.appearance;
     ['hair','hairColor','eyeColor','skin'].forEach(k => { if (!S.appearance[k]) S.appearance[k] = base.appearance[k]; });
     if (typeof S.charName !== 'string') S.charName = '';
-    ['habitChecks','tasks','tplInjected','weekFocus','monthBoss','yearBoss','monthGoals','yearGoals','rewarded','bossRewarded','ach','activity','totals','trophies','habitMedals'].forEach(k => {
+    ['habitChecks','tasks','tplInjected','weekFocus','monthBoss','yearBoss','monthGoals','yearGoals','rewarded','bossRewarded','ach','weekExp','activity','totals','trophies','habitMedals'].forEach(k => {
         if (!S[k] || typeof S[k] !== 'object') S[k] = base[k];
     });
     if (!S.ownedAuras) S.ownedAuras = ['gold'];
@@ -132,6 +133,11 @@ export function save() {
 export function overwriteFromCloud(cloudState) {
     localStorage.setItem(KEY, JSON.stringify(cloudState));
     return load();
+}
+
+// Полный сброс локального прогресса
+export function resetLocal() {
+    localStorage.removeItem(KEY);
 }
 
 // Задачи дня с автодобавлением из шаблонов.

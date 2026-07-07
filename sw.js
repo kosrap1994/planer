@@ -2,7 +2,7 @@
 // Стратегия: сеть в приоритете (обновления подхватываются сразу),
 // при отсутствии сети — отдаём из кэша.
 
-const CACHE = 'planner-v2-2';
+const CACHE = 'planner-v2-7';
 
 const CORE = [
     './',
@@ -14,6 +14,7 @@ const CORE = [
     './js/pixel.js',
     './js/config.js',
     './js/cloud.js',
+    './js/top.js',
     './manifest.webmanifest',
     './icons/icon-192.png',
     './icons/icon-512.png'

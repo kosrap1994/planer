@@ -12,6 +12,7 @@ import { icon, coinIcon, getSprite, paintStatic, AURAS, TIERS, tierForLevel,
 import { ECON, calcMaxExp, sortTasks, calcDiscipline, calcWillpower, allHabitsStreak,
          habitStreak, recalcActivityStreak, applyDecay, getBoss,
          ACHIEVEMENTS, checkAchievements, SHOP_ITEMS, CUSTOM_ICON_KEYS } from './game.js';
+import { weekBots } from './top.js';
 
 // ---------- Хелперы ----------
 
@@ -86,6 +87,11 @@ function gainCoins(n, ev) {
 
 function gainExp(n, ev) {
     S.exp += n;
+    // недельный опыт — для Топ-50
+    const mk = mondayOf(todayKey());
+    S.weekExp[mk] = (S.weekExp[mk] || 0) + n;
+    const wkKeys = Object.keys(S.weekExp).sort();
+    while (wkKeys.length > 6) delete S.weekExp[wkKeys.shift()];
     floatText(`+${n} EXP`, 'float-exp', ev);
     let leveled = false;
     while (S.exp >= S.maxExp) {
@@ -574,6 +580,241 @@ function renderCharacter() {
     paintStatic('char-scene', spriteOpts());
 }
 
+// ---------- Экран «Топ-50 недели» ----------
+
+// Анимированные аватарки топа: свечение ЧЕСТНО зависит от уровня —
+// 1–9 нет, 10+ едва тлеет, 25+ заметное + глаза, 50+ полыхает.
+const GLOW_STRENGTH = [0, 0.14, 0.36, 0.68];
+const GLOW_SHADOW = ['', '2px', '5px', '9px'];
+const GLOW_PARTS = [0, 2, 4, 8];
+const GLOW_ALPHA = [0, 0.45, 0.7, 0.95];
+
+const _glowCache = {};
+function glowBgFor(auraKey, ti, w, h) {
+    const key = auraKey + '_' + ti + '_' + w + 'x' + h;
+    if (_glowCache[key]) return _glowCache[key];
+    const a = AURAS[auraKey] || AURAS.gold;
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d');
+    const s = GLOW_STRENGTH[ti];
+    const g = ctx.createRadialGradient(w / 2, h / 2 + 4, 2, w / 2, h / 2 + 4, w * 0.72);
+    g.addColorStop(0, a.inner + s + ')');
+    g.addColorStop(0.55, a.outer + (s * 0.55) + ')');
+    g.addColorStop(1, a.outer + '0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    _glowCache[key] = cv;
+    return cv;
+}
+
+let lbItems = [];
+let lbTick = 0;
+let lbLoopStarted = false;
+
+function lbSpawnPart(w, h) {
+    return { x: 6 + Math.random() * (w - 12), y: h - 6 - Math.random() * 18, vy: 0.15 + Math.random() * 0.3, life: 0, max: 60 + Math.random() * 60 };
+}
+
+// Мини-молния для аур типа bolt
+function genMiniBolt(w, h) {
+    const pts = [];
+    let x = 8 + Math.random() * (w - 16);
+    let y = 4 + Math.random() * (h * 0.35);
+    pts.push([x, y]);
+    const n = 3 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < n; i++) {
+        x += (Math.random() - 0.5) * 10;
+        y += 6 + Math.random() * 7;
+        pts.push([x, y]);
+    }
+    return pts;
+}
+
+// Пиксельное мини-сердце 5×5
+const HEART_MINI = ['.r.r.', 'rrrrr', 'rrrrr', '.rrr.', '..r..'];
+
+let _puffCache = null;
+function smokePuff() {
+    if (_puffCache) return _puffCache;
+    const cv = document.createElement('canvas');
+    cv.width = 16; cv.height = 16;
+    const ctx = cv.getContext('2d');
+    const g = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
+    g.addColorStop(0, 'rgba(215,215,228,0.55)');
+    g.addColorStop(1, 'rgba(160,160,175,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 16, 16);
+    _puffCache = cv;
+    return cv;
+}
+
+function lbDrawItem(item, animate) {
+    const { cv, ctx, sprite, aura, ti, type } = item;
+    const a = AURAS[aura] || AURAS.gold;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    if (ti > 0) {
+        ctx.drawImage(item.glowBg, 0, 0);
+
+        if (type === 'bolt') {
+            // молнии: редкие вспышки вместо частиц
+            if (animate) {
+                if (item.boltLife > 0) item.boltLife--;
+                else if (--item.boltTimer <= 0) {
+                    item.boltPts = genMiniBolt(cv.width, cv.height);
+                    item.boltLife = 7;
+                    item.boltTimer = 20 + Math.random() * 45;
+                }
+            }
+            if (item.boltLife > 0 && item.boltPts) {
+                const fa = (item.boltLife / 7) * (0.5 + 0.5 * Math.random()) * GLOW_ALPHA[ti];
+                ctx.lineJoin = 'round';
+                [[3, a.outer + (fa * 0.7) + ')'], [1.2, 'rgba(255,255,255,' + fa + ')']].forEach(pair => {
+                    ctx.strokeStyle = pair[1];
+                    ctx.lineWidth = pair[0];
+                    ctx.beginPath();
+                    ctx.moveTo(item.boltPts[0][0], item.boltPts[0][1]);
+                    item.boltPts.forEach(pt => ctx.lineTo(pt[0], pt[1]));
+                    ctx.stroke();
+                });
+            }
+        } else {
+            const vyk = type === 'smoke' ? 0.55 : type === 'heart' ? 0.8 : 1;
+            item.parts.forEach(p => {
+                if (animate) {
+                    p.y -= p.vy * vyk; p.life++;
+                    if (p.life > p.max || p.y < 4) Object.assign(p, lbSpawnPart(cv.width, cv.height));
+                }
+                const k = p.life / p.max;
+                const alpha = Math.max(0, (k < 0.25 ? k / 0.25 : 1 - (k - 0.25) / 0.75) * GLOW_ALPHA[ti]);
+                ctx.globalAlpha = alpha;
+                if (type === 'smoke') {
+                    ctx.drawImage(smokePuff(), p.x - 8, p.y - 8);
+                } else if (type === 'heart') {
+                    ctx.fillStyle = a.parts[p.ci];
+                    const s = p.ci === 0 ? 2 : 1; // часть сердечек покрупнее
+                    HEART_MINI.forEach((row, hy) => {
+                        for (let hx = 0; hx < 5; hx++) {
+                            if (row[hx] === 'r') ctx.fillRect(p.x + (hx - 2) * s, p.y + (hy - 2) * s, s, s);
+                        }
+                    });
+                } else {
+                    ctx.fillStyle = a.parts[p.ci];
+                    ctx.fillRect(Math.round(p.x / 2) * 2, Math.round(p.y / 2) * 2, 2, 2);
+                }
+            });
+            ctx.globalAlpha = 1;
+        }
+    }
+    ctx.drawImage(sprite, item.ox, item.oy);
+    if (ti >= 2) {
+        const ga = Math.min(0.9, (0.35 + 0.3 * Math.sin(lbTick * 0.07)) * (ti === 3 ? 1.3 : 1));
+        [[8.5, 7.5], [14.5, 7.5]].forEach(ep => {
+            const ex = item.ox + ep[0] * 2, ey = item.oy + ep[1] * 2;
+            const eg = ctx.createRadialGradient(ex, ey, 0, ex, ey, 5);
+            eg.addColorStop(0, a.inner + ga + ')');
+            eg.addColorStop(1, a.outer + '0)');
+            ctx.fillStyle = eg;
+            ctx.beginPath(); ctx.arc(ex, ey, 5, 0, 7); ctx.fill();
+        });
+    }
+}
+
+function lbFrame() {
+    requestAnimationFrame(lbFrame);
+    if (currentView !== 'view-top' || !lbItems.length) return;
+    lbTick++;
+    if (lbTick % 2) return; // ~30 кадров/с — хватает и не греет телефон
+    lbItems.forEach(item => lbDrawItem(item, true));
+}
+
+function buildLbItems(all) {
+    lbItems = [];
+    document.querySelectorAll('#view-top .lb-av').forEach(cv => {
+        const p = all[Number(cv.dataset.i)];
+        const sprite = getSprite(p.opts, 2);
+        const ti = TIERS.indexOf(tierForLevel(p.level));
+        const a = AURAS[p.aura] || AURAS.gold;
+        const parts = [];
+        for (let i = 0; i < GLOW_PARTS[ti]; i++) {
+            const pt = lbSpawnPart(cv.width, cv.height);
+            pt.life = Math.random() * pt.max;
+            pt.ci = Math.floor(Math.random() * a.parts.length);
+            parts.push(pt);
+        }
+        cv.style.filter = ti > 0 ? `drop-shadow(0 0 ${GLOW_SHADOW[ti]} ${a.sw})` : '';
+        const item = {
+            cv, ctx: cv.getContext('2d'), sprite, aura: p.aura, ti, parts,
+            type: a.type || 'flame',
+            boltPts: genMiniBolt(cv.width, cv.height), boltLife: 5, boltTimer: 10 + Math.random() * 40,
+            glowBg: ti > 0 ? glowBgFor(p.aura, ti, cv.width, cv.height) : null,
+            ox: (cv.width - sprite.width) / 2,
+            oy: cv.height - sprite.height - 2
+        };
+        lbItems.push(item);
+        lbDrawItem(item, false); // первый кадр сразу, даже без анимации
+    });
+    if (!lbLoopStarted) {
+        lbLoopStarted = true;
+        requestAnimationFrame(lbFrame);
+    }
+}
+
+function lbRow(p, rank) {
+    const rankCls = rank === 1 ? ' lb-gold' : rank === 2 ? ' lb-silver' : rank === 3 ? ' lb-bronze' : '';
+    const achList = p.achList || [];
+    const shown = achList.slice(0, 6);
+    return `<div class="lb-row${p.me ? ' lb-me' : ''}">
+        <span class="lb-rank px-font${rankCls}">${rank}</span>
+        <canvas class="lb-av px" width="56" height="70" data-i="${p._i}"></canvas>
+        <div class="lb-info">
+            <div class="lb-nick">${esc(p.nick)}${p.me ? ' <span class="lb-you">— ты</span>' : ''}</div>
+            <div class="lb-ach-row">
+                ${shown.length ? shown.map(x => `<span title="${esc(x.name)}">${icon(x.icon, 14)}</span>`).join('') : '<span class="muted small">без ачивок</span>'}
+                ${achList.length > 6 ? `<span class="muted small">+${achList.length - 6}</span>` : ''}
+            </div>
+        </div>
+        <span class="lb-lvl px-font">LVL ${p.level}</span>
+        <span class="lb-exp px-font">${p.weekExp} EXP</span>
+    </div>`;
+}
+
+function renderTop() {
+    const mk = mondayOf(todayKey());
+    const me = {
+        me: true,
+        nick: S.charName || CHARACTERS[S.gender].name,
+        weekExp: S.weekExp[mk] || 0,
+        level: S.level,
+        achCount: ACHIEVEMENTS.filter(a => S.ach[a.id]).length,
+        aura: S.aura,
+        opts: spriteOpts()
+    };
+    me.achList = ACHIEVEMENTS.filter(a => S.ach[a.id]);
+    const all = [...weekBots(), me].sort((a, b) => (b.weekExp - a.weekExp) || (a.me ? -1 : 1));
+    all.forEach((p, i) => { p._i = i; });
+    const myRank = all.indexOf(me) + 1;
+    const top = all.slice(0, 50);
+    const monday = parseKey(mk);
+    const sunday = parseKey(keyOffset(mk, 6));
+
+    $('view-top').innerHTML = `
+    <div class="card">
+        <div class="card-head">
+            <span class="card-label">Топ-50 недели</span>
+            <span class="muted small">${monday.getDate()} ${MONTHS[monday.getMonth()]} — ${sunday.getDate()} ${MONTHS[sunday.getMonth()]}</span>
+        </div>
+        <p class="muted small">Рейтинг по опыту, набранному за эту неделю. В понедельник — новый сезон и новые соперники. Твоё место: <b class="lb-you">#${myRank}</b></p>
+        <div class="lb-list">
+            ${top.map((p, i) => lbRow(p, i + 1)).join('')}
+            ${myRank > 50 ? `<div class="lb-gap muted small">··· ещё ${myRank - 51} игроков ···</div>${lbRow(me, myRank)}` : ''}
+        </div>
+    </div>`;
+
+    // аватарки: первый кадр + анимация
+    buildLbItems(all);
+}
+
 // ---------- Экран «Магазин» ----------
 
 function shopCardHTML(item, isCustom) {
@@ -780,6 +1021,7 @@ const RENDERERS = {
     'view-today': renderToday,
     'view-week': renderWeek,
     'view-goals': renderGoals,
+    'view-top': renderTop,
     'view-character': renderCharacter,
     'view-shop': renderShop
 };
