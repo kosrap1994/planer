@@ -12,7 +12,7 @@ import { icon, coinIcon, getSprite, paintStatic, AURAS, TIERS, tierForLevel,
 import { ECON, calcMaxExp, sortTasks, calcDiscipline, calcWillpower, allHabitsStreak,
          habitStreak, recalcActivityStreak, applyDecay, getBoss,
          ACHIEVEMENTS, checkAchievements, SHOP_ITEMS, CUSTOM_ICON_KEYS } from './game.js';
-import { weekBots } from './top.js';
+import { weekBots, botCurrentExp } from './top.js';
 
 // ---------- Хелперы ----------
 
@@ -791,7 +791,9 @@ function renderTop() {
         opts: spriteOpts()
     };
     me.achList = ACHIEVEMENTS.filter(a => S.ach[a.id]);
-    const all = [...weekBots(), me].sort((a, b) => (b.weekExp - a.weekExp) || (a.me ? -1 : 1));
+    // боты набирают опыт постепенно в течение недели — живая гонка
+    const bots = weekBots().map(b => Object.assign({}, b, { weekExp: botCurrentExp(b) }));
+    const all = [...bots, me].sort((a, b) => (b.weekExp - a.weekExp) || (a.me ? -1 : 1));
     all.forEach((p, i) => { p._i = i; });
     const myRank = all.indexOf(me) + 1;
     const top = all.slice(0, 50);

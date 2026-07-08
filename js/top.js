@@ -4,7 +4,7 @@
 // каждый понедельник — новая сотня.
 // =====================================================
 
-import { todayKey, mondayOf } from './state.js';
+import { todayKey, mondayOf, parseKey } from './state.js';
 import { HAIRSTYLES, HAIR_COLORS, EYE_COLORS, SKIN_TONES } from './pixel.js';
 import { ACHIEVEMENTS } from './game.js';
 
@@ -66,8 +66,10 @@ export function weekBots() {
     const bots = [];
 
     for (let i = 0; i < 100; i++) {
-        // Опыт за неделю: много «середняков», немного гигантов (до ~4200)
+        // Потолок опыта за неделю: много «середняков», немного гигантов (до ~4200).
+        // Реально набирается ботом ПОСТЕПЕННО в течение недели (см. weekProgress).
         const weekExp = Math.round(20 + 4200 * Math.pow(rng(), 2.4));
+        const pace = 0.75 + rng() * 0.5; // кто-то рвёт с понедельника, кто-то догоняет к выходным
         const level = Math.max(1, Math.min(99, Math.round(weekExp / 70 + rng() * 30)));
 
         const gender = rng() < 0.5 ? 'm' : 'f';
@@ -94,10 +96,10 @@ export function weekBots() {
         }
         const achList = idx.slice(0, achCount).map(n => ACHIEVEMENTS[n]);
 
-        bots.push({ nick: makeNick(rng, used), weekExp, level, achCount, achList, aura, opts });
+        bots.push({ nick: makeNick(rng, used), baseExp: weekExp, pace, weekExp, level, achCount, achList, aura, opts });
     }
 
-    bots.sort((a, b) => b.weekExp - a.weekExp);
+    bots.sort((a, b) => b.baseExp - a.baseExp);
 
     // Витрина: самые топовые ОБЯЗАНЫ сверкать донатом.
     // Ранги 1–8 — кристальные ауры (молнии/сердечки), 9–16 — дым вперемешку с кристаллами.
@@ -113,4 +115,16 @@ export function weekBots() {
 
     _cache = { key: mk, bots };
     return bots;
+}
+
+// Прогресс недели 0..1 (утро понедельника ≈ 0, вечер воскресенья = 1)
+export function weekProgress() {
+    const start = parseKey(mondayOf(todayKey())).getTime();
+    return Math.min(1, Math.max(0.02, (Date.now() - start) / (7 * 86400000)));
+}
+
+// Текущий (уже «набранный») опыт бота на данный момент недели
+export function botCurrentExp(bot) {
+    const prog = weekProgress();
+    return Math.max(3, Math.round(bot.baseExp * Math.pow(prog, bot.pace)));
 }
