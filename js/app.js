@@ -446,17 +446,32 @@ function accStatus(msg, isError) {
     }
 }
 
-// После входа: облако главнее локального; если облако пустое — заливаем локального героя
+// Оценка прогресса героя — побеждает копия, где наиграно больше.
+// Старый облачный снимок больше НИКОГДА не затрёт свежий локальный прогресс.
+function progressScore(st) {
+    if (!st || !st.created) return -1;
+    const t = st.totals || {};
+    return (st.level || 1) * 1000000
+        + (st.exp || 0) * 100
+        + (t.tasks || 0) * 50
+        + (t.habits || 0) * 25
+        + Object.keys(st.ach || {}).length * 200
+        + (st.coins || 0);
+}
+
+// Сверка после входа: берём копию с бОльшим прогрессом, вторую обновляем
 async function syncOnLogin() {
     try {
         const cloudState = await pullState(cloudUser.id);
-        if (cloudState && cloudState.created) {
+        const cs = progressScore(cloudState);
+        const ls = progressScore(S);
+        if (cs > ls) {
             overwriteFromCloud(cloudState);
             recalcActivityStreak();
             toast('star', 'Герой загружен из облака', esc(S.charName || ''));
         } else {
             await pushState(cloudUser.id, S);
-            toast('star', 'Герой сохранён в облако', 'Теперь он с тобой на любом устройстве');
+            toast('star', cs >= 0 ? 'Локальный прогресс новее' : 'Герой сохранён в облако', 'Облако обновлено');
         }
         rerender();
     } catch (e) {
@@ -467,7 +482,105 @@ async function syncOnLogin() {
 async function initCloud() {
     if (!cloudConfigured()) return;
     cloudUser = await getUser();
+    if (!cloudUser) {
+        if (currentView === 'view-character') renderCharacter();
+        return;
+    }
+    try {
+        if (!S.created) {
+            // свежее устройство, но сессия жива — тянем героя из облака
+            const cloudState = await pullState(cloudUser.id);
+            if (cloudState && cloudState.created) {
+                const gate = $('auth-gate');
+                if (gate) gate.remove();
+                overwriteFromCloud(cloudState);
+                recalcActivityStreak();
+                rerender();
+                toast('star', 'С возвращением!', esc(S.charName || ''));
+                return;
+            }
+        } else {
+            // сессия жива: сверяем копии и лечим отставшую
+            const cloudState = await pullState(cloudUser.id);
+            const cs = progressScore(cloudState);
+            const ls = progressScore(S);
+            if (cs > ls) {
+                overwriteFromCloud(cloudState);
+                recalcActivityStreak();
+                rerender();
+                toast('star', 'Синхронизировано из облака', esc(S.charName || ''));
+            } else if (ls > cs) {
+                await pushState(cloudUser.id, S);
+            }
+        }
+    } catch (e) {
+        console.warn('Сверка с облаком не удалась (играем локально):', e.message || e);
+    }
     if (currentView === 'view-character') renderCharacter();
+}
+
+// Стартовый экран входа (до создания персонажа)
+function openAuthGate() {
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.id = 'auth-gate';
+    overlay.innerHTML = `
+    <div class="modal creator" style="max-width: 420px;">
+        <h2 class="modal-title glow-gold creator-title">Вход</h2>
+        <p class="muted small" style="text-align:center;">Аккаунт хранит героя в облаке — играй с телефона и компьютера одним персонажем.</p>
+        <input id="gate-email" class="input" type="email" placeholder="Почта" autocomplete="email">
+        <input id="gate-pass" class="input" type="password" placeholder="Пароль (мин. 6 символов)" autocomplete="current-password">
+        <div class="acc-row" style="justify-content:center;">
+            <button class="btn btn-primary" id="gate-login">Войти</button>
+            <button class="btn" id="gate-signup">Регистрация</button>
+        </div>
+        <div class="muted small" id="gate-status" style="text-align:center; min-height:18px;"></div>
+        <button class="btn btn-ghost-inline btn-sm" id="gate-guest" style="width:100%;">Играть без аккаунта — герой останется только в этом браузере</button>
+    </div>`;
+    $('modal-root').appendChild(overlay);
+
+    const status = (m, err) => {
+        const el = overlay.querySelector('#gate-status');
+        el.innerText = m;
+        el.style.color = err ? 'var(--red)' : 'var(--green)';
+    };
+
+    const auth = async (mode) => {
+        const email = overlay.querySelector('#gate-email').value.trim();
+        const pass = overlay.querySelector('#gate-pass').value;
+        if (!email || pass.length < 6) {
+            status('Укажи почту и пароль от 6 символов', true);
+            return;
+        }
+        status(mode === 'in' ? 'Входим...' : 'Регистрируем...');
+        try {
+            const data = mode === 'in' ? await signIn(email, pass) : await signUp(email, pass);
+            if (!data.session) {
+                status('Аккаунт создан! Подтверди почту по письму и нажми «Войти».');
+                return;
+            }
+            cloudUser = data.user;
+            const cloudState = await pullState(cloudUser.id);
+            overlay.remove();
+            if (cloudState && cloudState.created) {
+                overwriteFromCloud(cloudState);
+                recalcActivityStreak();
+                rerender();
+                toast('star', 'С возвращением!', esc(S.charName || ''));
+            } else {
+                openCreator(true); // новый аккаунт → создаём героя, он уйдёт в облако
+            }
+        } catch (e) {
+            status(e.message || 'Ошибка', true);
+        }
+    };
+
+    overlay.querySelector('#gate-login').addEventListener('click', () => auth('in'));
+    overlay.querySelector('#gate-signup').addEventListener('click', () => auth('up'));
+    overlay.querySelector('#gate-guest').addEventListener('click', () => {
+        overlay.remove();
+        openCreator(true);
+    });
 }
 
 // ---------- Экран «Персонаж» ----------
@@ -1441,10 +1554,13 @@ function init() {
         };
     });
 
-    // Первый запуск — создание персонажа
-    if (!S.created) openCreator(true);
+    // Первый запуск: сначала аккаунт, потом создание персонажа
+    if (!S.created) {
+        if (cloudConfigured()) openAuthGate();
+        else openCreator(true);
+    }
 
-    // Аккаунт: проверяем сессию в фоне
+    // Аккаунт: проверяем сессию и сверяем копии в фоне
     initCloud();
 
     if (decay.loss > 0) {
