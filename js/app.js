@@ -3,7 +3,7 @@
 // =====================================================
 
 import { S, load, save, uid, todayKey, keyOffset, mondayOf, parseKey, dayTasks,
-         removeTemplateTasks, overwriteFromCloud,
+         removeTemplateTasks, overwriteFromCloud, resetLocal,
          MONTHS, MONTHS_NOM, WEEKDAYS, WEEKDAYS_SHORT, pad } from './state.js';
 import { cloudConfigured, getUser, signIn, signUp, signOut, pullState, pushState } from './cloud.js';
 import { icon, coinIcon, getSprite, paintStatic, AURAS, TIERS, tierForLevel,
@@ -499,6 +499,13 @@ async function initCloud() {
                 toast('star', 'С возвращением!', esc(S.charName || ''));
                 return;
             }
+            // сессия жива, но героя в облаке нет (напр., после обнуления) — сразу к созданию
+            const gate = $('auth-gate');
+            if (gate) {
+                gate.remove();
+                openCreator(true);
+            }
+            return;
         } else {
             // сессия жива: сверяем копии и лечим отставшую
             const cloudState = await pullState(cloudUser.id);
@@ -688,7 +695,11 @@ function renderCharacter() {
         </div>
     </div>
 
-    ${accountCardHTML()}`;
+    ${accountCardHTML()}
+
+    <div class="reset-row">
+        <button class="btn btn-sm btn-danger" data-act="acc-reset">Начать заново — обнулить аккаунт</button>
+    </div>`;
 
     paintStatic('char-scene', spriteOpts());
 }
@@ -1464,6 +1475,20 @@ function bindEvents() {
                     accStatus((err.message || 'Ошибка'), true);
                 }
             })();
+        }
+        else if (act === 'acc-reset') {
+            const overlay = modal(`<div class="modal-icon">${icon('skull', 72)}</div>
+                <h2 class="modal-title glow-red">Обнулить аккаунт?</h2>
+                <p class="muted">Герой, уровень, монеты, ачивки и вся история будут удалены${cloudUser ? ' — и в этом браузере, и в облаке' : ''}. Начнёшь с чистого листа.</p>
+                <button class="btn btn-danger" id="acc-reset-confirm">Да, стереть всё и начать заново</button>`);
+            overlay.querySelector('#acc-reset-confirm').addEventListener('click', async () => {
+                try {
+                    // затираем облачную копию пустышкой, чтобы сверка не воскресила героя
+                    if (cloudUser) await pushState(cloudUser.id, { created: false });
+                } catch (e) { /* облако недоступно — хотя бы локально */ }
+                resetLocal();
+                location.reload();
+            });
         }
         else if (act === 'acc-logout') {
             (async () => {
