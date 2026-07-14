@@ -1,79 +1,131 @@
 // =====================================================
-// cloud.js — Supabase: аккаунт и синхронизация героя
-// Таблица profiles2 (id = auth.users.id, state jsonb)
+// cloud.js — Firebase: аккаунт и синхронизация героя
+// Auth (почта+пароль) + Firestore, документ profiles/{uid}
+// Герой хранится строкой JSON — надёжно для любых полей.
 // =====================================================
 
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { FIREBASE_CONFIG } from './config.js';
 
-let _client = null;
+const SDK = 'https://www.gstatic.com/firebasejs/11.0.0/';
+
+let _auth = null;
+let _db = null;
+let _mods = null;
 
 export function cloudConfigured() {
-    return SUPABASE_URL.startsWith('https://') && SUPABASE_ANON_KEY.length > 20;
+    return !!(FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId);
 }
 
-async function getClient() {
-    if (!cloudConfigured()) return null;
-    if (!_client) {
-        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
-        _client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            auth: {
-                storage: window.localStorage,
-                storageKey: 'planner-v2-auth',
-                autoRefreshToken: true,
-                persistSession: true
-            }
-        });
-    }
-    return _client;
+async function init() {
+    if (_mods) return _mods;
+    const [appMod, authMod, fsMod] = await Promise.all([
+        import(SDK + 'firebase-app.js'),
+        import(SDK + 'firebase-auth.js'),
+        import(SDK + 'firebase-firestore.js')
+    ]);
+    const app = appMod.initializeApp(FIREBASE_CONFIG);
+    _auth = authMod.getAuth(app);
+    _auth.languageCode = 'ru';
+    _db = fsMod.getFirestore(app);
+    _mods = { authMod, fsMod };
+    return _mods;
 }
 
+// Человеческие сообщения об ошибках
+function ruError(e) {
+    const code = (e && e.code) || '';
+    if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found'))
+        return 'Неверная почта или пароль';
+    if (code.includes('email-already-in-use'))
+        return 'Такая почта уже зарегистрирована — нажми «Войти»';
+    if (code.includes('invalid-email'))
+        return 'Некорректная почта';
+    if (code.includes('weak-password'))
+        return 'Слишком простой пароль (минимум 6 символов)';
+    if (code.includes('too-many-requests'))
+        return 'Слишком много попыток — подожди пару минут';
+    if (code.includes('network-request-failed'))
+        return 'Нет связи с сервером — проверь интернет';
+    return (e && e.message) || 'Ошибка';
+}
+
+// Приводим пользователя Firebase к формату приложения ({id, email})
+const norm = u => (u ? { id: u.uid, email: u.email } : null);
+
+// Пользователь текущей сессии (ждём восстановления сессии после загрузки)
 export async function getUser() {
     try {
-        const c = await getClient();
-        if (!c) return null;
-        const { data } = await c.auth.getUser();
-        return data.user || null;
+        const { authMod } = await init();
+        if (_auth.currentUser) return norm(_auth.currentUser);
+        return await new Promise(resolve => {
+            let done = false;
+            const unsub = authMod.onAuthStateChanged(_auth, u => {
+                if (done) return;
+                done = true;
+                unsub();
+                resolve(norm(u));
+            });
+            setTimeout(() => {
+                if (done) return;
+                done = true;
+                try { unsub(); } catch (e) { /* — */ }
+                resolve(norm(_auth.currentUser));
+            }, 5000);
+        });
     } catch (e) {
         return null;
     }
 }
 
 export async function signUp(email, password) {
-    const c = await getClient();
-    const { data, error } = await c.auth.signUp({ email, password });
-    if (error) throw error;
-    return data; // {user, session} — session=null, если включено подтверждение почты
+    const { authMod } = await init();
+    try {
+        const cred = await authMod.createUserWithEmailAndPassword(_auth, email, password);
+        // Firebase пускает сразу, подтверждение почты не требуется
+        return { user: norm(cred.user), session: true };
+    } catch (e) {
+        throw new Error(ruError(e));
+    }
 }
 
 export async function signIn(email, password) {
-    const c = await getClient();
-    const { data, error } = await c.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    return data;
+    const { authMod } = await init();
+    try {
+        const cred = await authMod.signInWithEmailAndPassword(_auth, email, password);
+        return { user: norm(cred.user), session: true };
+    } catch (e) {
+        throw new Error(ruError(e));
+    }
 }
 
 export async function signOut() {
-    const c = await getClient();
-    if (c) await c.auth.signOut();
+    try {
+        const { authMod } = await init();
+        await authMod.signOut(_auth);
+    } catch (e) { /* — */ }
 }
 
 // Забрать героя из облака (null — в облаке пусто)
 export async function pullState(userId) {
-    const c = await getClient();
-    const { data, error } = await c.from('profiles2').select('state').eq('id', userId).maybeSingle();
-    if (error) throw error;
-    return data ? data.state : null;
+    const { fsMod } = await init();
+    const snap = await fsMod.getDoc(fsMod.doc(_db, 'profiles', userId));
+    if (!snap.exists()) return null;
+    const raw = snap.data().state;
+    if (!raw) return null;
+    try {
+        return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch (e) {
+        return null;
+    }
 }
 
 // Немедленно отправить героя в облако
 export async function pushState(userId, state) {
-    const c = await getClient();
-    const { error } = await c.from('profiles2').upsert({
-        id: userId,
-        state,
-        updated_at: new Date().toISOString()
+    const { fsMod } = await init();
+    await fsMod.setDoc(fsMod.doc(_db, 'profiles', userId), {
+        state: JSON.stringify(state),
+        updatedAt: new Date().toISOString()
     });
-    if (error) throw error;
 }
 
 // Отложенная отправка (дебаунс) — дергается из save()
@@ -83,11 +135,9 @@ export function schedulePush(getState) {
     if (_pushTimer) clearTimeout(_pushTimer);
     _pushTimer = setTimeout(async () => {
         try {
-            const c = await getClient();
-            if (!c) return;
-            const { data } = await c.auth.getUser();
-            if (!data.user) return; // гость — только localStorage
-            await pushState(data.user.id, getState());
+            const user = await getUser();
+            if (!user) return; // гость — только localStorage
+            await pushState(user.id, getState());
         } catch (e) {
             console.warn('Синхронизация не удалась (данные целы локально):', e.message || e);
         }
