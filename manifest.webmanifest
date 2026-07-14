@@ -1,6 +1,6 @@
 {
-  "name": "Планер",
-  "short_name": "Планер",
+  "name": "Planner Game",
+  "short_name": "Planner Game",
   "description": "RPG-планер: выполняй задачи и привычки, прокачивай героя",
   "lang": "ru",
   "start_url": "./",
