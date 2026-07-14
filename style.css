@@ -841,6 +841,8 @@ button { font-family: var(--font); color: var(--text); }
 .btn-danger { border-color: rgba(248, 81, 73, 0.5); color: var(--red); }
 .btn-danger:hover { background: rgba(248, 81, 73, 0.1); box-shadow: 0 0 12px rgba(248, 81, 73, 0.25); }
 
+.reset-row { display: flex; justify-content: center; padding: 6px 0 20px; }
+
 @media (max-width: 640px) {
   .lb-row { gap: 8px; padding: 8px 6px; }
   .lb-lvl { display: none; }
